@@ -26,7 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 const brand = {
-  name: "Homewise",
+  name: "Home Affordability Calculator",
   tagline: "Know your budget. Time your refi.",
   description:
     "Two clean calculators that keep the math simple: How Much House Can I Afford and Refi Break-even. Export a PDF summary you can share with lenders or partners.",
@@ -564,7 +564,7 @@ function ExportSection() {
           <CardContent>
             <div className="grid gap-4">
               <div className="rounded-2xl border bg-muted/20 p-4">
-                <div className="text-xs text-muted-foreground">Homewise report</div>
+                <div className="text-xs text-muted-foreground">Home Affordability Calculator report</div>
                 <div className="mt-2 h-32 rounded-xl border bg-background" />
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   {Array.from({ length: 3 }).map((_, i) => (
@@ -806,7 +806,7 @@ function Footer({ onNav }) {
               </div>
             </div>
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              Homewise keeps the math clear for buyers and owners. Clean inputs, exportable PDFs, and a learn hub
+              Home Affordability Calculator keeps the math clear for buyers and owners. Clean inputs, exportable PDFs, and a learn hub
               that explains what the numbers mean.
             </p>
           </div>
@@ -853,7 +853,7 @@ function Footer({ onNav }) {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs text-muted-foreground">
-            Copyright {new Date().getFullYear()} Homewise. All rights reserved.
+            Copyright {new Date().getFullYear()} Home Affordability Calculator. All rights reserved.
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="secondary" className="rounded-xl">
