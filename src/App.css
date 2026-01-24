@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/* Tailwind v4 + shadcn theme tokens.
+   Rebranded to Atalanta-style: black + blue primary. */
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+
+  /* Atalanta blue */
+  --primary: oklch(0.554 0.121 252.71);
+  --primary-foreground: oklch(0.985 0 0);
+
+  /* Atalanta black */
+  --secondary: oklch(0 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.46 0 0);
+
+  /* Keep accents aligned with primary */
+  --accent: oklch(0.554 0.121 252.71);
+  --accent-foreground: oklch(0.985 0 0);
+
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  --border: oklch(0.92 0 0);
+  --input: oklch(0.92 0 0);
+
+  --ring: oklch(0.554 0.121 252.71);
+
+  --radius: 1rem;
+}
+
+.dark {
+  /* Blue-black background, slightly deeper */
+  --background: oklch(0.085 0.02 252.71) !important;
+  --foreground: oklch(0.985 0 0) !important;
+
+  /* Lift surfaces a bit more so sections/cards read */
+  --card: oklch(0.135 0.025 252.71) !important;
+  --popover: oklch(0.135 0.025 252.71) !important;
+
+  /* Stronger, more “team” blue for CTAs */
+  --primary: oklch(0.62 0.16 252.71) !important;
+  --primary-foreground: oklch(0.985 0 0) !important;
+
+  /* Secondary stays blue-black */
+  --secondary: oklch(0.10 0.02 252.71) !important;
+  --secondary-foreground: oklch(0.985 0 0) !important;
+
+  /* Better contrast for muted text */
+  --muted: oklch(0.18 0.03 252.71) !important;
+  --muted-foreground: oklch(0.80 0.02 252.71) !important;
+
+  /* Accents for hover states */
+  --accent: oklch(0.22 0.04 252.71) !important;
+  --accent-foreground: oklch(0.985 0 0) !important;
+
+  /* Borders/inputs need to be more visible on dark */
+  --border: oklch(0.26 0.03 252.71) !important;
+  --input: oklch(0.26 0.03 252.71) !important;
+
+  --ring: oklch(0.62 0.16 252.71) !important;
+}
+
+/* Nice defaults for full-width layouts */
+html,
+body {
+  height: 100%;
+}
+
+#root {
+  min-height: 100%;
+}

@@ -1,0 +1,27 @@
+:root {
+  /* Atalanta blue */
+  --primary: oklch(0.554 0.121 252.71) !important;
+  --primary-foreground: oklch(0.985 0 0) !important;
+
+  /* Atalanta black */
+  --secondary: oklch(0 0 0) !important;
+  --secondary-foreground: oklch(0.985 0 0) !important;
+
+  --accent: oklch(0.554 0.121 252.71) !important;
+  --accent-foreground: oklch(0.985 0 0) !important;
+
+  --ring: oklch(0.554 0.121 252.71) !important;
+}
+
+.dark {
+  --primary: oklch(0.554 0.121 252.71) !important;
+  --primary-foreground: oklch(0.985 0 0) !important;
+
+  --secondary: oklch(0 0 0) !important;
+  --secondary-foreground: oklch(0.985 0 0) !important;
+
+  --accent: oklch(0.554 0.121 252.71) !important;
+  --accent-foreground: oklch(0.985 0 0) !important;
+
+  --ring: oklch(0.554 0.121 252.71) !important;
+}
