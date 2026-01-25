@@ -13,10 +13,6 @@ const RATE_SOURCES = {
     label: "Freddie Mac 15Y fixed (PMMS via FRED)",
     url: "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE15US",
   },
-  MORTGAGE5US: {
-    label: "Freddie Mac 5Y ARM (PMMS via FRED)",
-    url: "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE5US",
-  },
 };
 
 const parseFredCsv = (text) => {

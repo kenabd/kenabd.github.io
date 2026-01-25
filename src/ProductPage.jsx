@@ -20,14 +20,11 @@ const RATE_SOURCES = {
     label: "Freddie Mac 15Y fixed (PMMS via FRED)",
     url: "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE15US",
   },
-  MORTGAGE5US: {
-    label: "Freddie Mac 5Y ARM (PMMS via FRED)",
-    url: "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE5US",
-  },
 };
 const RATE_CACHE_KEY = "calculator.rateCache.v1";
 const RATE_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 const hasRateData = (data) => data && Object.keys(data).length > 0;
+const PMI_RATE_DEFAULT = 0.006;
 
 const LOAN_TYPES = [
   {
@@ -184,7 +181,8 @@ const parseCensusTaxRate = (rows) => {
   };
 };
 
-const buildPdfHtml = (title, sections) => {
+const buildPdfHtml = (title, sections, options = {}) => {
+  const { autoPrint = false } = options;
   const sectionHtml = sections
     .map((section) => {
       if (section.table) {
@@ -328,6 +326,7 @@ const buildPdfHtml = (title, sections) => {
             margin: 24px;
           }
         </style>
+        ${autoPrint ? `<script>window.addEventListener("load", () => setTimeout(() => window.print(), 300));</script>` : ""}
       </head>
       <body>
         <div class="brand">
@@ -341,8 +340,8 @@ const buildPdfHtml = (title, sections) => {
           ${new Date().toLocaleDateString("en-US")}.
         </p>
         <p>
-          These figures are estimates based on the inputs provided, Freddie Mac PMMS averages, and ZIP-level
-          property tax estimates from U.S. Census ACS data.
+          These figures are estimates based on the inputs provided, benchmark rates, and ZIP-level property tax
+          estimates from U.S. Census ACS data. PMI is estimated when LTV is above 80%.
         </p>
         <p><strong>Not a quote:</strong> This report is for planning only and does not constitute a lender offer.</p>
         ${sectionHtml}
@@ -352,7 +351,17 @@ const buildPdfHtml = (title, sections) => {
 };
 
 const openPdfExport = (title, sections) => {
-  const html = buildPdfHtml(title, sections);
+  const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const html = buildPdfHtml(title, sections, { autoPrint: !isMobile });
+  const printWindow = window.open("", "_blank");
+
+  if (printWindow) {
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    return;
+  }
+
   const frame = document.createElement("iframe");
   frame.style.position = "fixed";
   frame.style.right = "0";
@@ -364,11 +373,8 @@ const openPdfExport = (title, sections) => {
   document.body.appendChild(frame);
 
   frame.onload = () => {
-    const printDoc = () => {
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-    };
-    setTimeout(printDoc, 300);
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
     setTimeout(() => {
       frame.remove();
     }, 500);
@@ -407,6 +413,7 @@ export default function CalculatorPage() {
   const [strategyIndex, setStrategyIndex] = useState(1);
   const [showAssumptions, setShowAssumptions] = useState(false);
   const [insuranceOverride, setInsuranceOverride] = useState("");
+  const [pmiRateOverride, setPmiRateOverride] = useState("");
   const [taxRateOverride, setTaxRateOverride] = useState("");
   const [rateData, setRateData] = useState({});
   const [rateStatus, setRateStatus] = useState("idle");
@@ -463,6 +470,8 @@ export default function CalculatorPage() {
           setShowAssumptions(storedSettings.showAssumptions);
         if (typeof storedSettings.insuranceOverride === "string")
           setInsuranceOverride(storedSettings.insuranceOverride);
+        if (typeof storedSettings.pmiRateOverride === "string")
+          setPmiRateOverride(storedSettings.pmiRateOverride);
         if (typeof storedSettings.taxRateOverride === "string")
           setTaxRateOverride(storedSettings.taxRateOverride);
       }
@@ -558,6 +567,7 @@ export default function CalculatorPage() {
       strategyIndex,
       showAssumptions,
       insuranceOverride,
+      pmiRateOverride,
       taxRateOverride,
     };
     localStorage.setItem("calculator.affordInputs", JSON.stringify(affordInputs));
@@ -577,6 +587,7 @@ export default function CalculatorPage() {
     strategyIndex,
     showAssumptions,
     insuranceOverride,
+    pmiRateOverride,
     taxRateOverride,
   ]);
 
@@ -655,6 +666,9 @@ export default function CalculatorPage() {
     const grossMonthly = annualIncome / 12;
     const maxHousingBudget = Math.max(0, grossMonthly * selectedStrategy.ratio - expenses);
     const insuranceMonthly = 120;
+    const pmiRateOverrideValue = parseNumber(pmiRateOverride);
+    const pmiAnnualRate =
+      pmiRateOverrideValue > 0 ? pmiRateOverrideValue / 100 : PMI_RATE_DEFAULT;
 
     return LOAN_TYPES.map((loan) => {
       const { rate } = resolveRateForLoan(loan);
@@ -669,8 +683,10 @@ export default function CalculatorPage() {
       );
       const loanAmount = principalPayment > 0 ? principalPayment / loanPaymentFactor : 0;
       const homePrice = loanAmount + downPayment;
+      const ltv = homePrice > 0 ? loanAmount / homePrice : 0;
+      const pmiMonthly = ltv > 0.8 ? (loanAmount * pmiAnnualRate) / 12 : 0;
       const monthlyPI = monthlyPayment(loanAmount, rate, loan.amortizationYears);
-      const totalMonthly = monthlyPI + insuranceMonthly + hoaMonthly + propertyTaxMonthly;
+      const totalMonthly = monthlyPI + insuranceMonthly + pmiMonthly + hoaMonthly + propertyTaxMonthly;
       const termMonths = loan.amortizationYears * 12;
       const totalInterest = monthlyPI * termMonths - loanAmount;
 
@@ -680,6 +696,7 @@ export default function CalculatorPage() {
         rate,
         loanAmount,
         homePrice,
+        pmiMonthly,
         monthlyPI,
         totalMonthly,
         totalInterest,
@@ -698,6 +715,7 @@ export default function CalculatorPage() {
     selectedScore,
     selectedStrategy,
     taxRate,
+    pmiRateOverride,
   ]);
 
   const affordability = useMemo(() => {
@@ -715,6 +733,9 @@ export default function CalculatorPage() {
     const insuranceMonthlyDefault = 120;
     const insuranceMonthly =
       insuranceOverride !== "" ? parseNumber(insuranceOverride) : insuranceMonthlyDefault;
+    const pmiRateOverrideValue = parseNumber(pmiRateOverride);
+    const pmiAnnualRate =
+      pmiRateOverrideValue > 0 ? pmiRateOverrideValue / 100 : PMI_RATE_DEFAULT;
     const loanPaymentFactor = monthlyPayment(1, rate, selectedLoanType.amortizationYears) || 1;
     const basePrincipal = Math.max(0, maxHousingBudget - insuranceMonthly - hoaMonthly);
     const baseLoanAmount = basePrincipal > 0 ? basePrincipal / loanPaymentFactor : 0;
@@ -722,12 +743,22 @@ export default function CalculatorPage() {
     const overrideTaxRate = parseNumber(taxRateOverride) / 100;
     const taxRateUsed = overrideTaxRate > 0 ? overrideTaxRate : taxRate;
     const propertyTaxMonthly = taxRateUsed > 0 ? (baseHomePrice * taxRateUsed) / 12 : 0;
-    const principalPayment = Math.max(
+    const principalPaymentPre = Math.max(
       0,
       maxHousingBudget - insuranceMonthly - hoaMonthly - propertyTaxMonthly
     );
+    const loanAmountPre = principalPaymentPre > 0 ? principalPaymentPre / loanPaymentFactor : 0;
+    const homePricePre = loanAmountPre + downPayment;
+    const ltvPre = homePricePre > 0 ? loanAmountPre / homePricePre : 0;
+    const pmiMonthlyPre = ltvPre > 0.8 ? (loanAmountPre * pmiAnnualRate) / 12 : 0;
+    const principalPayment = Math.max(
+      0,
+      maxHousingBudget - insuranceMonthly - hoaMonthly - propertyTaxMonthly - pmiMonthlyPre
+    );
     const loanAmount = principalPayment > 0 ? principalPayment / loanPaymentFactor : 0;
     const estimatedHomePrice = loanAmount + downPayment;
+    const ltv = estimatedHomePrice > 0 ? loanAmount / estimatedHomePrice : 0;
+    const pmiMonthly = ltv > 0.8 ? (loanAmount * pmiAnnualRate) / 12 : 0;
     const closingCostRateDefault = 0.025;
     const closingCostRateUsed = closingCostRateInput || closingCostRateDefault;
     const closingCostsAuto = estimatedHomePrice * closingCostRateUsed;
@@ -754,6 +785,9 @@ export default function CalculatorPage() {
       rate,
       insuranceMonthly,
       insuranceMonthlyDefault,
+      pmiMonthly,
+      pmiAnnualRate,
+      ltv,
       propertyTaxMonthly,
       taxRate: taxRateUsed,
       taxRateSource: overrideTaxRate > 0 ? "override" : "zip",
@@ -771,6 +805,7 @@ export default function CalculatorPage() {
     selectedStrategy,
     taxRate,
     insuranceOverride,
+    pmiRateOverride,
     taxRateOverride,
   ]);
 
@@ -858,6 +893,7 @@ export default function CalculatorPage() {
             <th>Home price</th>
             <th>Loan amount</th>
             <th>Monthly P&amp;I</th>
+            <th>Monthly PMI</th>
             <th>Total monthly</th>
             <th>Total interest</th>
           </tr>
@@ -872,6 +908,7 @@ export default function CalculatorPage() {
               <td>${formatMoney(option.homePrice)}</td>
               <td>${formatMoney(option.loanAmount)}</td>
               <td>${formatMoney(option.monthlyPI)}</td>
+              <td>${formatMoney(option.pmiMonthly)}</td>
               <td>${formatMoney(option.totalMonthly)}</td>
               <td>${formatMoney(option.totalInterest)}</td>
             </tr>
@@ -925,7 +962,22 @@ export default function CalculatorPage() {
         title: "Assumptions",
         items: [
           { label: "Housing ratio (gross income)", value: selectedStrategy.label },
-          { label: "Insurance (monthly)", value: formatMoney(affordability.insuranceMonthly) },
+          { label: "Home insurance (monthly)", value: formatMoney(affordability.insuranceMonthly) },
+          {
+            label: "PMI (monthly)",
+            value: affordability.pmiMonthly > 0 ? formatMoney(affordability.pmiMonthly) : "Not required",
+          },
+          {
+            label: "PMI rate (annual)",
+            value:
+              affordability.pmiMonthly > 0
+                ? formatRatioPercent(affordability.pmiAnnualRate)
+                : "Not required",
+          },
+          {
+            label: "Loan-to-value (LTV)",
+            value: affordability.ltv > 0 ? formatRatioPercent(affordability.ltv) : "Not available",
+          },
           {
             label: "Property tax (monthly)",
             value: formatMoney(affordability.propertyTaxMonthly),
@@ -940,6 +992,10 @@ export default function CalculatorPage() {
             value: `${formatPercent(affordability.closingCostRateUsed * 100)} of price`,
           },
           { label: "Loan term", value: `${selectedLoanType.amortizationYears} years` },
+          {
+            label: "Rates as of",
+            value: rateNote?.date ? `${rateNote.label} (${rateNote.date})` : "Not available",
+          },
         ],
       },
       {
@@ -988,6 +1044,7 @@ export default function CalculatorPage() {
     setStrategyIndex(1);
     setShowAssumptions(false);
     setInsuranceOverride("");
+    setPmiRateOverride("");
     setTaxRateOverride("");
     setActiveCalc("afford");
     setResetTick((prev) => prev + 1);
@@ -1319,12 +1376,24 @@ export default function CalculatorPage() {
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-2">
                       <label className="text-xs text-muted-foreground">
-                        Insurance (monthly, default {formatMoney(affordability.insuranceMonthlyDefault)})
+                        Home insurance (monthly, default {formatMoney(affordability.insuranceMonthlyDefault)})
                       </label>
                       <Input
                         value={insuranceOverride}
                         onChange={(event) => setInsuranceOverride(sanitizeNumeric(event.target.value))}
                         placeholder="ex 120"
+                        inputMode="decimal"
+                        pattern="[0-9.]*"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs text-muted-foreground">
+                        PMI rate (annual %, default {(PMI_RATE_DEFAULT * 100).toFixed(2)}%)
+                      </label>
+                      <Input
+                        value={pmiRateOverride}
+                        onChange={(event) => setPmiRateOverride(sanitizeNumeric(event.target.value))}
+                        placeholder="ex 0.6"
                         inputMode="decimal"
                         pattern="[0-9.]*"
                       />
@@ -1390,47 +1459,63 @@ export default function CalculatorPage() {
               </div>
 
                 <div className="rounded-2xl border bg-background/70 p-4 text-sm text-muted-foreground">
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                    Breakdown
-                  </div>
-                  <div className="mt-3 grid gap-2">
-                    <div className="flex items-center justify-between gap-4">
-                      <span>Housing budget (gross income)</span>
-                      <span>
-                      {formatMoney(affordability.grossMonthly)} x {selectedStrategy.ratio} -
-                      {` ${formatMoney(affordability.expenses)} = ${formatMoney(affordability.maxHousingBudget)}`}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span>P&I budget</span>
-                      <span>
-                      {formatMoney(affordability.maxHousingBudget)} - {formatMoney(affordability.insuranceMonthly)} -
-                      {` ${formatMoney(affordability.propertyTaxMonthly)} - ${formatMoney(affordability.hoaMonthly)} = ${formatMoney(affordability.principalPayment)}`}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span>HOA monthly</span>
-                      <span>
-                        {formatMoney(affordability.hoaAnnual)} / 12 = {formatMoney(affordability.hoaMonthly)}
-                      </span>
-                    </div>
+                <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Breakdown
+                </div>
+                <div className="mt-3 grid gap-2">
                   <div className="flex items-center justify-between gap-4">
-                      <span>Property tax (monthly)</span>
-                      <span>
-                        {formatMoney(affordability.estimatedHomePrice)} x {formatRatioPercent(affordability.taxRate)} / 12 =
-                        {` ${formatMoney(affordability.propertyTaxMonthly)}`}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span>Property tax rate</span>
-                      <span>
-                        {affordability.taxRate > 0 ? formatRatioPercent(affordability.taxRate) : "Not available"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span>Insurance (monthly)</span>
-                      <span>{formatMoney(affordability.insuranceMonthly)}</span>
-                    </div>
+                    <span>Housing budget (gross)</span>
+                    <span>
+                      {formatMoney(affordability.grossMonthly)} x {selectedStrategy.ratio} -{" "}
+                      {formatMoney(affordability.expenses)} = {formatMoney(affordability.maxHousingBudget)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>Home insurance (monthly)</span>
+                    <span>{formatMoney(affordability.insuranceMonthly)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>PMI (monthly)</span>
+                    <span>
+                      {affordability.pmiMonthly > 0
+                        ? `${formatMoney(affordability.pmiMonthly)} (${formatRatioPercent(
+                            affordability.pmiAnnualRate
+                          )} on ${formatMoney(affordability.loanAmount)}, LTV ${formatRatioPercent(
+                            affordability.ltv
+                          )})`
+                        : "Not required (LTV <= 80%)"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>Property tax (monthly)</span>
+                    <span>
+                      {formatMoney(affordability.estimatedHomePrice)} x{" "}
+                      {formatRatioPercent(affordability.taxRate)} / 12 ={" "}
+                      {formatMoney(affordability.propertyTaxMonthly)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>Property tax rate</span>
+                    <span>
+                      {affordability.taxRate > 0 ? formatRatioPercent(affordability.taxRate) : "Not available"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>HOA (monthly)</span>
+                    <span>
+                      {formatMoney(affordability.hoaAnnual)} / 12 = {formatMoney(affordability.hoaMonthly)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>P&amp;I budget</span>
+                    <span>
+                      {formatMoney(affordability.maxHousingBudget)} -{" "}
+                      {formatMoney(affordability.insuranceMonthly)} -{" "}
+                      {formatMoney(affordability.pmiMonthly)} -{" "}
+                      {formatMoney(affordability.propertyTaxMonthly)} -{" "}
+                      {formatMoney(affordability.hoaMonthly)} = {formatMoney(affordability.principalPayment)}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-between gap-4">
                     <span>Closing cash</span>
                     <span>
@@ -1454,6 +1539,13 @@ export default function CalculatorPage() {
                   <div className="flex items-center justify-between gap-4">
                     <span>Estimated loan amount</span>
                     <span>{formatMoney(affordability.loanAmount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>Estimated home price</span>
+                    <span>
+                      {formatMoney(affordability.loanAmount)} + {formatMoney(affordability.downPayment)} ={" "}
+                      {formatMoney(affordability.estimatedHomePrice)}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-4">
                     <span>Price range</span>
