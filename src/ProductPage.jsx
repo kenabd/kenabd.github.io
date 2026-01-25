@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { Calculator, FileDown, Home, RotateCcw, Timer } from "lucide-react";
+import { Calculator, FileDown, Home, Moon, RotateCcw, Sun, Timer } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,9 @@ const RATE_SOURCES = {
     url: "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE5US",
   },
 };
+const RATE_CACHE_KEY = "calculator.rateCache.v1";
+const RATE_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
+const hasRateData = (data) => data && Object.keys(data).length > 0;
 
 const LOAN_TYPES = [
   {
@@ -413,6 +416,7 @@ export default function CalculatorPage() {
   const [activeCalc, setActiveCalc] = useState("afford");
   const [resetTick, setResetTick] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
 
   const selectedLoanType = useMemo(
     () => LOAN_TYPES.find((loan) => loan.id === loanTypeId) ?? LOAN_TYPES[0],
@@ -468,8 +472,46 @@ export default function CalculatorPage() {
       setHydrated(true);
     }
 
+    const loadServerCache = async () => {
+      try {
+        const response = await fetch("/rates.json");
+        if (!response.ok) return false;
+        const payload = await response.json();
+        if (!hasRateData(payload?.data)) return false;
+        setRateData(payload.data);
+        setRateStatus("ready");
+        localStorage.setItem(
+          RATE_CACHE_KEY,
+          JSON.stringify({ fetchedAt: Date.now(), data: payload.data })
+        );
+        return true;
+      } catch (error) {
+        return false;
+      }
+    };
+
     const fetchRates = async () => {
       setRateStatus("loading");
+      let hasLocalCache = false;
+      try {
+        const cachedPayload = JSON.parse(localStorage.getItem(RATE_CACHE_KEY) || "null");
+        if (
+          cachedPayload &&
+          hasRateData(cachedPayload.data) &&
+          typeof cachedPayload.fetchedAt === "number" &&
+          Date.now() - cachedPayload.fetchedAt < RATE_CACHE_TTL_MS
+        ) {
+          setRateData(cachedPayload.data);
+          setRateStatus("ready");
+          hasLocalCache = true;
+        }
+      } catch (error) {
+        hasLocalCache = false;
+      }
+
+      const hasServerCache = await loadServerCache();
+      if (hasServerCache || hasLocalCache) return;
+
       try {
         const entries = await Promise.all(
           Object.entries(RATE_SOURCES).map(async ([key, source]) => {
@@ -486,6 +528,10 @@ export default function CalculatorPage() {
         const nextData = Object.fromEntries(entries);
         setRateData(nextData);
         setRateStatus("ready");
+        localStorage.setItem(
+          RATE_CACHE_KEY,
+          JSON.stringify({ fetchedAt: Date.now(), data: nextData })
+        );
       } catch (error) {
         setRateStatus("error");
       }
@@ -493,6 +539,11 @@ export default function CalculatorPage() {
 
     fetchRates();
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDark);
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+  }, [isDark]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -1032,9 +1083,15 @@ export default function CalculatorPage() {
             <div className="text-sm font-semibold tracking-tight">Home Affordability Calculator</div>
           </div>
 
-          <Badge variant="secondary" className="rounded-full px-2.5 py-1 text-[11px]">
-            Ad-free inputs
-          </Badge>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={() => setIsDark((prev) => !prev)}
+          >
+            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
         </div>
       </header>
 
