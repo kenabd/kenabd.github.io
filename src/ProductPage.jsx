@@ -1462,21 +1462,24 @@ export default function CalculatorPage() {
                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   Breakdown
                 </div>
-                <div className="mt-3 grid gap-2">
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Housing budget (gross)</span>
-                    <span>
+                <div className="mt-3 h-px w-full bg-border/60" />
+                <div className="mt-3 grid divide-y divide-border/60 text-sm">
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Housing budget (gross)</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                       {formatMoney(affordability.grossMonthly)} x {selectedStrategy.ratio} -{" "}
                       {formatMoney(affordability.expenses)} = {formatMoney(affordability.maxHousingBudget)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Home insurance (monthly)</span>
-                    <span>{formatMoney(affordability.insuranceMonthly)}</span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Home insurance (monthly)</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
+                      {formatMoney(affordability.insuranceMonthly)}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>PMI (monthly)</span>
-                    <span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">PMI (monthly)</span>
+                    <span className="rounded-2xl border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                       {affordability.pmiMonthly > 0
                         ? `${formatMoney(affordability.pmiMonthly)} (${formatRatioPercent(
                             affordability.pmiAnnualRate
@@ -1486,29 +1489,29 @@ export default function CalculatorPage() {
                         : "Not required (LTV <= 80%)"}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Property tax (monthly)</span>
-                    <span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Property tax (monthly)</span>
+                    <span className="rounded-2xl border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                       {formatMoney(affordability.estimatedHomePrice)} x{" "}
                       {formatRatioPercent(affordability.taxRate)} / 12 ={" "}
                       {formatMoney(affordability.propertyTaxMonthly)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Property tax rate</span>
-                    <span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Property tax rate</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                       {affordability.taxRate > 0 ? formatRatioPercent(affordability.taxRate) : "Not available"}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>HOA (monthly)</span>
-                    <span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">HOA (monthly)</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                       {formatMoney(affordability.hoaAnnual)} / 12 = {formatMoney(affordability.hoaMonthly)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>P&amp;I budget</span>
-                    <span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">P&amp;I budget</span>
+                    <span className="rounded-2xl border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                       {formatMoney(affordability.maxHousingBudget)} -{" "}
                       {formatMoney(affordability.insuranceMonthly)} -{" "}
                       {formatMoney(affordability.pmiMonthly)} -{" "}
@@ -1516,40 +1519,44 @@ export default function CalculatorPage() {
                       {formatMoney(affordability.hoaMonthly)} = {formatMoney(affordability.principalPayment)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Closing cash</span>
-                    <span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Closing cash</span>
+                    <span className="rounded-2xl border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                       {formatMoney(affordability.downPayment)} + {formatMoney(affordability.closingCosts)} ={" "}
                       {formatMoney(affordability.downPayment + affordability.closingCosts)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Estimated rate</span>
-                    <span>{formatPercent(resolvedRate.rate)}</span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Estimated rate</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
+                      {formatPercent(resolvedRate.rate)}
+                    </span>
                   </div>
                   {rateMode === "credit" ? (
-                    <div className="flex items-center justify-between gap-4">
-                      <span>Credit score adjust</span>
-                      <span>
+                    <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <span className="font-semibold text-foreground">Credit score adjust</span>
+                      <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                         {resolvedRate.scoreAdjust > 0 ? "+" : ""}
                         {formatPercent(resolvedRate.scoreAdjust)}
                       </span>
                     </div>
                   ) : null}
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Estimated loan amount</span>
-                    <span>{formatMoney(affordability.loanAmount)}</span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Estimated loan amount</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
+                      {formatMoney(affordability.loanAmount)}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Estimated home price</span>
-                    <span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Estimated home price</span>
+                    <span className="rounded-2xl border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                       {formatMoney(affordability.loanAmount)} + {formatMoney(affordability.downPayment)} ={" "}
                       {formatMoney(affordability.estimatedHomePrice)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Price range</span>
-                    <span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Price range</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                       {formatMoney(affordability.conservative)} - {formatMoney(affordability.optimistic)}
                     </span>
                   </div>
@@ -1716,42 +1723,52 @@ export default function CalculatorPage() {
                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   Breakdown
                 </div>
-                <div className="mt-3 grid gap-2">
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Current payment</span>
-                    <span>{formatMoney(refi.currentPayment)}</span>
+                <div className="mt-3 h-px w-full bg-border/60" />
+                <div className="mt-3 grid divide-y divide-border/60 text-sm">
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Current payment</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
+                      {formatMoney(refi.currentPayment)}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>New payment</span>
-                    <span>{formatMoney(refi.newPayment)}</span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">New payment</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
+                      {formatMoney(refi.newPayment)}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Monthly savings</span>
-                    <span>{formatMoney(refi.monthlySavings)}</span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Monthly savings</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
+                      {formatMoney(refi.monthlySavings)}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Break-even</span>
-                    <span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Break-even</span>
+                    <span className="rounded-2xl border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
                       {refi.monthlySavings > 0
                         ? `${formatMoney(refi.closingCosts)} / ${formatMoney(refi.monthlySavings)} = Month ${refi.breakEvenMonths}`
                         : "Not in range"}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <span>Refi rate mode</span>
-                    <span>{refiRateMode}</span>
+                  <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <span className="font-semibold text-foreground">Refi rate mode</span>
+                    <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
+                      {refiRateMode}
+                    </span>
                   </div>
                   {refiRateMode === "target" ? (
-                    <div className="flex items-center justify-between gap-4">
-                      <span>Target months</span>
-                      <span>{refi.targetMonths || "Not set"}</span>
+                    <div className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <span className="font-semibold text-foreground">Target months</span>
+                      <span className="rounded-full border bg-muted/30 px-3 py-1 text-xs text-muted-foreground sm:text-sm">
+                        {refi.targetMonths || "Not set"}
+                      </span>
                     </div>
                   ) : null}
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button className="rounded-2xl">Compare scenarios</Button>
                 <Button variant="outline" className="rounded-2xl" onClick={exportRefi}>
                   Export PDF
                   <FileDown className="ml-2 h-4 w-4" />
