@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "fetchedAt": 1770560645234,
-  "fetchedAtIso": "2026-02-08T14:24:05.234Z",
+  "fetchedAt": 1770562278343,
+  "fetchedAtIso": "2026-02-08T14:51:18.343Z",
   "source": "FRED",
   "data": {
     "MORTGAGE30US": {
