@@ -1,11 +1,24 @@
-﻿import { useEffect, useMemo, useState } from "react";
-import { Calculator, FileDown, Home, Moon, RotateCcw, Sun, Timer } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Calculator,
+  Copy,
+  FileDown,
+  Gauge,
+  Home,
+  Moon,
+  RefreshCw,
+  RotateCcw,
+  Share2,
+  Sparkles,
+  Sun,
+  Timer,
+  TrendingDown,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 
 const RATE_COSD = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30)
   .toISOString()
@@ -15,16 +28,101 @@ const RATE_SOURCES = {
   MORTGAGE30US: {
     label: "Freddie Mac 30Y fixed (PMMS via FRED)",
     url: "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE30US",
+    bucket: "30Y fixed",
+    aliases: [],
   },
   MORTGAGE15US: {
     label: "Freddie Mac 15Y fixed (PMMS via FRED)",
     url: "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE15US",
+    bucket: "15Y fixed",
+    aliases: [],
+  },
+  MORTGAGE5US: {
+    label: "Freddie Mac 5/1 ARM (PMMS via FRED)",
+    url: "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE5US",
+    bucket: "5/1 ARM",
+    aliases: ["MORTGAGEARMSUS"],
   },
 };
-const RATE_CACHE_KEY = "calculator.rateCache.v1";
+const RATE_SERIES_ALIASES = Object.fromEntries(
+  Object.entries(RATE_SOURCES).map(([seriesId, source]) => [seriesId, [seriesId, ...source.aliases]])
+);
+const MARKET_RATE_CARDS = [
+  { seriesId: "MORTGAGE15US", label: "15Y fixed benchmark" },
+  { seriesId: "MORTGAGE30US", label: "30Y fixed benchmark" },
+  { seriesId: "MORTGAGE5US", label: "5/1 ARM benchmark" },
+];
+const RATE_CACHE_KEY = "calculator.rateCache.v2";
 const RATE_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 const hasRateData = (data) => data && Object.keys(data).length > 0;
 const PMI_RATE_DEFAULT = 0.006;
+const SCENARIO_STORAGE_KEY = "calculator.savedScenarios.v1";
+const MAX_SCENARIOS = 6;
+
+const AFFORD_PRESETS = [
+  {
+    id: "starter",
+    label: "Starter buyer",
+    inputs: {
+      annualIncome: "95000",
+      expenses: "900",
+      downPayment: "20000",
+      hoaAnnual: "1200",
+      zipCode: "30309",
+    },
+  },
+  {
+    id: "family-upgrade",
+    label: "Family upgrade",
+    inputs: {
+      annualIncome: "165000",
+      expenses: "1600",
+      downPayment: "65000",
+      hoaAnnual: "2400",
+      zipCode: "30024",
+    },
+  },
+  {
+    id: "aggressive",
+    label: "Aggressive saver",
+    inputs: {
+      annualIncome: "220000",
+      expenses: "2300",
+      downPayment: "120000",
+      hoaAnnual: "3000",
+      zipCode: "10001",
+    },
+  },
+];
+
+const REFI_PRESETS = [
+  {
+    id: "mild-savings",
+    label: "Moderate savings",
+    inputs: {
+      balance: "320000",
+      currentRate: "7.1",
+      closingCosts: "6500",
+      targetMonths: "24",
+    },
+  },
+  {
+    id: "fast-breakeven",
+    label: "Fast break-even",
+    inputs: {
+      balance: "460000",
+      currentRate: "7.5",
+      closingCosts: "9000",
+      targetMonths: "18",
+    },
+  },
+];
+
+const monthFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 
 const LOAN_TYPES = [
   {
@@ -163,6 +261,97 @@ const parseFredCsv = (text) => {
   return null;
 };
 
+const formatRateDate = (value) => {
+  if (!value) return "Unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return monthFormatter.format(date);
+};
+
+const daysSince = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24)));
+};
+
+const buildBestRatesSummary = (data) => {
+  const available = Object.entries(data || {})
+    .filter(([, item]) => Number.isFinite(item?.rate))
+    .map(([seriesId, item]) => ({
+      seriesId,
+      bucket: item.bucket || RATE_SOURCES[seriesId]?.bucket || seriesId,
+      label: item.label || RATE_SOURCES[seriesId]?.label || seriesId,
+      rate: item.rate,
+      date: item.date,
+    }))
+    .sort((a, b) => a.rate - b.rate);
+
+  if (!available.length) {
+    return {
+      available: [],
+      lowest: null,
+      highest: null,
+      spreadBps: null,
+    };
+  }
+
+  const lowest = available[0];
+  const highest = available[available.length - 1];
+  return {
+    available,
+    lowest,
+    highest,
+    spreadBps: Math.round((highest.rate - lowest.rate) * 100),
+  };
+};
+
+const normalizeRatesPayload = (payload) => {
+  const data = payload?.data && typeof payload.data === "object" ? payload.data : {};
+  const fetchedAt =
+    typeof payload?.fetchedAt === "number" && Number.isFinite(payload.fetchedAt)
+      ? payload.fetchedAt
+      : Date.now();
+  const fetchedAtIso = payload?.fetchedAtIso || new Date(fetchedAt).toISOString();
+  const bestRates = payload?.summary?.bestRates || buildBestRatesSummary(data);
+
+  return {
+    data,
+    fetchedAt,
+    fetchedAtIso,
+    source: payload?.source || "FRED",
+    summary: {
+      bestRates,
+    },
+  };
+};
+
+const encodeStatePayload = (value) => {
+  try {
+    const json = JSON.stringify(value);
+    const bytes = new TextEncoder().encode(json);
+    let binary = "";
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    return btoa(binary);
+  } catch {
+    return "";
+  }
+};
+
+const decodeStatePayload = (encoded) => {
+  try {
+    const binary = atob(encoded);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
 const parseCensusTaxRate = (rows) => {
   if (!Array.isArray(rows) || rows.length < 2) return null;
   const [header, data] = rows;
@@ -178,6 +367,43 @@ const parseCensusTaxRate = (rows) => {
     homeValue,
     annualTax,
     rate: annualTax / homeValue,
+  };
+};
+
+const fetchRateWithAliases = async (seriesId) => {
+  const aliases = RATE_SERIES_ALIASES[seriesId] ?? [seriesId];
+  const results = [];
+  for (const aliasId of aliases) {
+    try {
+      const aliasSource = RATE_SOURCES[seriesId];
+      const rateUrl =
+        aliasId === seriesId
+          ? aliasSource.url
+          : `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${aliasId}`;
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`${rateUrl}&cosd=${RATE_COSD}`)}`;
+      const response = await fetch(proxyUrl);
+      if (!response.ok) continue;
+      const text = await response.text();
+      const parsed = parseFredCsv(text);
+      if (!parsed) continue;
+      results.push({ ...parsed, sourceSeriesId: aliasId });
+    } catch {
+      // Try next alias when available.
+    }
+  }
+  if (!results.length) return null;
+
+  results.sort((a, b) => {
+    const aTime = new Date(a.date).getTime();
+    const bTime = new Date(b.date).getTime();
+    return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+  });
+  const best = results[0];
+  const aliasSource = RATE_SOURCES[seriesId];
+  return {
+    ...best,
+    label: aliasSource.label,
+    bucket: aliasSource.bucket,
   };
 };
 
@@ -416,13 +642,20 @@ export default function CalculatorPage() {
   const [pmiRateOverride, setPmiRateOverride] = useState("");
   const [taxRateOverride, setTaxRateOverride] = useState("");
   const [rateData, setRateData] = useState({});
+  const [rateMeta, setRateMeta] = useState({ fetchedAt: null, fetchedAtIso: null, source: "FRED" });
+  const [rateSummary, setRateSummary] = useState({
+    bestRates: { available: [], lowest: null, highest: null, spreadBps: null },
+  });
   const [rateStatus, setRateStatus] = useState("idle");
+  const [rateRefreshStatus, setRateRefreshStatus] = useState("idle");
   const [taxStatus, setTaxStatus] = useState("idle");
   const [taxRate, setTaxRate] = useState(0);
   const [taxMeta, setTaxMeta] = useState(null);
   const [activeCalc, setActiveCalc] = useState("afford");
   const [resetTick, setResetTick] = useState(0);
   const [hydrated, setHydrated] = useState(false);
+  const [savedScenarios, setSavedScenarios] = useState([]);
+  const [shareCopied, setShareCopied] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
 
   const selectedLoanType = useMemo(
@@ -446,11 +679,68 @@ export default function CalculatorPage() {
     [refiCreditScoreId]
   );
 
+  const applyRatesPayload = (rawPayload, options = {}) => {
+    const { persist = true } = options;
+    const payload = normalizeRatesPayload(rawPayload);
+    if (!hasRateData(payload.data)) return false;
+
+    setRateData(payload.data);
+    setRateMeta({
+      fetchedAt: payload.fetchedAt ?? null,
+      fetchedAtIso: payload.fetchedAtIso ?? null,
+      source: payload.source || "FRED",
+    });
+    setRateSummary(payload.summary);
+    setRateStatus("ready");
+
+    if (persist) {
+      localStorage.setItem(
+        RATE_CACHE_KEY,
+        JSON.stringify({
+          fetchedAt: payload.fetchedAt ?? Date.now(),
+          fetchedAtIso: payload.fetchedAtIso ?? new Date().toISOString(),
+          source: payload.source || "FRED",
+          summary: payload.summary,
+          data: payload.data,
+        })
+      );
+    }
+
+    return true;
+  };
+
+  const fetchRatesFromApi = async () => {
+    const entries = await Promise.all(
+      Object.keys(RATE_SOURCES).map(async (seriesId) => {
+        const parsed = await fetchRateWithAliases(seriesId);
+        if (!parsed) return null;
+        return [seriesId, parsed];
+      })
+    );
+
+    const data = Object.fromEntries(entries.filter(Boolean));
+    if (!hasRateData(data)) {
+      throw new Error("No API rates available.");
+    }
+
+    return normalizeRatesPayload({
+      fetchedAt: Date.now(),
+      fetchedAtIso: new Date().toISOString(),
+      source: "FRED",
+      data,
+      summary: {
+        bestRates: buildBestRatesSummary(data),
+      },
+    });
+  };
+
   useEffect(() => {
     try {
       const storedAfford = JSON.parse(localStorage.getItem("calculator.affordInputs") || "{}");
       const storedRefi = JSON.parse(localStorage.getItem("calculator.refiInputs") || "{}");
       const storedSettings = JSON.parse(localStorage.getItem("calculator.settings") || "{}");
+      const storedScenarios = JSON.parse(localStorage.getItem(SCENARIO_STORAGE_KEY) || "[]");
+
       if (storedAfford && typeof storedAfford === "object") {
         setAffordInputs((prev) => ({ ...prev, ...storedAfford }));
       }
@@ -475,8 +765,43 @@ export default function CalculatorPage() {
         if (typeof storedSettings.taxRateOverride === "string")
           setTaxRateOverride(storedSettings.taxRateOverride);
       }
-    } catch (error) {
-      // Ignore storage parse issues.
+      if (Array.isArray(storedScenarios)) {
+        setSavedScenarios(storedScenarios.slice(0, MAX_SCENARIOS));
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const sharedAfford = decodeStatePayload(params.get("a"));
+      const sharedRefi = decodeStatePayload(params.get("r"));
+      const sharedCalc = params.get("calc");
+
+      if (sharedAfford && typeof sharedAfford === "object") {
+        setAffordInputs((prev) => {
+          const next = { ...prev };
+          Object.keys(prev).forEach((key) => {
+            if (typeof sharedAfford[key] !== "string") return;
+            next[key] =
+              key === "zipCode"
+                ? sharedAfford[key].replace(/\D/g, "").slice(0, 5)
+                : sanitizeNumeric(sharedAfford[key]);
+          });
+          return next;
+        });
+      }
+      if (sharedRefi && typeof sharedRefi === "object") {
+        setRefiInputs((prev) => {
+          const next = { ...prev };
+          Object.keys(prev).forEach((key) => {
+            if (typeof sharedRefi[key] !== "string") return;
+            next[key] = sanitizeNumeric(sharedRefi[key]);
+          });
+          return next;
+        });
+      }
+      if (sharedCalc === "afford" || sharedCalc === "refi") {
+        setActiveCalc(sharedCalc);
+      }
+    } catch {
+      // Ignore storage or share-link parse issues.
     } finally {
       setHydrated(true);
     }
@@ -485,16 +810,8 @@ export default function CalculatorPage() {
       try {
         const response = await fetch("/rates.json");
         if (!response.ok) return false;
-        const payload = await response.json();
-        if (!hasRateData(payload?.data)) return false;
-        setRateData(payload.data);
-        setRateStatus("ready");
-        localStorage.setItem(
-          RATE_CACHE_KEY,
-          JSON.stringify({ fetchedAt: Date.now(), data: payload.data })
-        );
-        return true;
-      } catch (error) {
+        return applyRatesPayload(await response.json());
+      } catch {
         return false;
       }
     };
@@ -502,19 +819,19 @@ export default function CalculatorPage() {
     const fetchRates = async () => {
       setRateStatus("loading");
       let hasLocalCache = false;
+
       try {
         const cachedPayload = JSON.parse(localStorage.getItem(RATE_CACHE_KEY) || "null");
+        const normalizedCache = normalizeRatesPayload(cachedPayload);
         if (
-          cachedPayload &&
-          hasRateData(cachedPayload.data) &&
-          typeof cachedPayload.fetchedAt === "number" &&
-          Date.now() - cachedPayload.fetchedAt < RATE_CACHE_TTL_MS
+          normalizedCache &&
+          hasRateData(normalizedCache.data) &&
+          typeof normalizedCache.fetchedAt === "number" &&
+          Date.now() - normalizedCache.fetchedAt < RATE_CACHE_TTL_MS
         ) {
-          setRateData(cachedPayload.data);
-          setRateStatus("ready");
-          hasLocalCache = true;
+          hasLocalCache = applyRatesPayload(normalizedCache, { persist: false });
         }
-      } catch (error) {
+      } catch {
         hasLocalCache = false;
       }
 
@@ -522,26 +839,9 @@ export default function CalculatorPage() {
       if (hasServerCache || hasLocalCache) return;
 
       try {
-        const entries = await Promise.all(
-          Object.entries(RATE_SOURCES).map(async ([key, source]) => {
-            const rateUrl = `${source.url}&cosd=${RATE_COSD}`;
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rateUrl)}`;
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error(`Failed to fetch ${key}`);
-            const text = await response.text();
-            const parsed = parseFredCsv(text);
-            if (!parsed) throw new Error(`No data for ${key}`);
-            return [key, { ...parsed, label: source.label }];
-          })
-        );
-        const nextData = Object.fromEntries(entries);
-        setRateData(nextData);
-        setRateStatus("ready");
-        localStorage.setItem(
-          RATE_CACHE_KEY,
-          JSON.stringify({ fetchedAt: Date.now(), data: nextData })
-        );
-      } catch (error) {
+        const apiPayload = await fetchRatesFromApi();
+        applyRatesPayload(apiPayload);
+      } catch {
         setRateStatus("error");
       }
     };
@@ -592,6 +892,11 @@ export default function CalculatorPage() {
   ]);
 
   useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify(savedScenarios));
+  }, [hydrated, savedScenarios]);
+
+  useEffect(() => {
     const zip = affordInputs.zipCode.trim();
     if (zip.length !== 5) {
       setTaxStatus("idle");
@@ -613,7 +918,7 @@ export default function CalculatorPage() {
         setTaxRate(parsed.rate);
         setTaxMeta({ name: parsed.name, year: "2022 ACS 5-year" });
         setTaxStatus("ready");
-      } catch (error) {
+      } catch {
         setTaxStatus("error");
         setTaxRate(0);
         setTaxMeta(null);
@@ -637,16 +942,19 @@ export default function CalculatorPage() {
     return { rate, baseRate, loanAdjust, scoreAdjust };
   }, [affordInputs.rate, rateData, rateMode, selectedLoanType, selectedScore]);
 
-  const resolveRateForLoan = (loan) => {
-    const manualRate = parseNumber(affordInputs.rate);
-    const baseRate =
-      rateMode === "manual" ? manualRate : rateData[loan.rateSeries]?.rate ?? manualRate;
-    const scoreAdjust = rateMode === "credit" ? selectedScore.adjust : 0;
-    const rate = baseRate + loan.rateAdjust + scoreAdjust;
-    return { rate, baseRate, scoreAdjust };
-  };
+  const resolveRateForLoan = useCallback(
+    (loan) => {
+      const manualRate = parseNumber(affordInputs.rate);
+      const baseRate =
+        rateMode === "manual" ? manualRate : rateData[loan.rateSeries]?.rate ?? manualRate;
+      const scoreAdjust = rateMode === "credit" ? selectedScore.adjust : 0;
+      const rate = baseRate + loan.rateAdjust + scoreAdjust;
+      return { rate, baseRate, scoreAdjust };
+    },
+    [affordInputs.rate, rateData, rateMode, selectedScore]
+  );
 
-  const resolveRefiRate = () => {
+  const resolveRefiRate = useCallback(() => {
     const manualRate = parseNumber(refiInputs.newRate);
     const baseRate =
       refiRateMode === "manual"
@@ -655,7 +963,7 @@ export default function CalculatorPage() {
     const scoreAdjust = refiRateMode === "credit" ? selectedRefiScore.adjust : 0;
     const rate = baseRate + selectedRefiLoanType.rateAdjust + scoreAdjust;
     return { rate, baseRate, scoreAdjust };
-  };
+  }, [refiInputs.newRate, refiRateMode, rateData, selectedRefiLoanType, selectedRefiScore]);
 
   const loanOptions = useMemo(() => {
     const annualIncome = parseNumber(affordInputs.annualIncome);
@@ -709,13 +1017,10 @@ export default function CalculatorPage() {
     affordInputs.downPayment,
     affordInputs.closingCosts,
     affordInputs.hoaAnnual,
-    affordInputs.rate,
-    rateData,
-    rateMode,
-    selectedScore,
     selectedStrategy,
     taxRate,
     pmiRateOverride,
+    resolveRateForLoan,
   ]);
 
   const affordability = useMemo(() => {
@@ -859,7 +1164,202 @@ export default function CalculatorPage() {
       monthlySavings,
       breakEvenMonths,
     };
-  }, [refiInputs, selectedRefiLoanType, refiRateMode, selectedRefiScore, rateData]);
+  }, [refiInputs, selectedRefiLoanType, refiRateMode, resolveRefiRate]);
+
+  const sortedLoanOptions = useMemo(
+    () =>
+      [...loanOptions].sort(
+        (a, b) =>
+          a.rate - b.rate ||
+          a.totalMonthly - b.totalMonthly ||
+          b.homePrice - a.homePrice
+      ),
+    [loanOptions]
+  );
+
+  const selectedLoanOption = useMemo(
+    () => loanOptions.find((option) => option.id === loanTypeId) ?? sortedLoanOptions[0] ?? null,
+    [loanOptions, loanTypeId, sortedLoanOptions]
+  );
+
+  const bestRatesSnapshot = useMemo(() => {
+    const fromSummary = rateSummary?.bestRates;
+    if (fromSummary?.available?.length) return fromSummary;
+    return buildBestRatesSummary(rateData);
+  }, [rateSummary, rateData]);
+
+  const rateFreshnessDays = useMemo(
+    () => daysSince(rateMeta.fetchedAtIso || (rateMeta.fetchedAt ? new Date(rateMeta.fetchedAt).toISOString() : null)),
+    [rateMeta]
+  );
+
+  const marketRateCards = useMemo(
+    () =>
+      MARKET_RATE_CARDS.map((card) => {
+        const row = rateData[card.seriesId];
+        return {
+          ...card,
+          rate: row?.rate ?? null,
+          date: row?.date ?? null,
+          labelFull: row?.label || card.label,
+        };
+      }),
+    [rateData]
+  );
+
+  const affordabilityHealth = useMemo(() => {
+    const gross = affordability.grossMonthly;
+    const selectedTotal = selectedLoanOption?.totalMonthly ?? 0;
+    const ratio = gross > 0 ? selectedTotal / gross : 0;
+
+    if (ratio <= 0.28) {
+      return {
+        label: "Healthy",
+        note: "Payment ratio is inside common underwriting comfort zones.",
+        ratio,
+      };
+    }
+    if (ratio <= 0.36) {
+      return {
+        label: "Watchlist",
+        note: "Budget is workable, but less flexible against shocks.",
+        ratio,
+      };
+    }
+    return {
+      label: "High risk",
+      note: "Payment ratio is stretched and may be hard to sustain.",
+      ratio,
+    };
+  }, [affordability, selectedLoanOption]);
+
+  const refiRecommendation = useMemo(() => {
+    if (refi.monthlySavings <= 0 || refi.breakEvenMonths <= 0) {
+      return {
+        label: "Wait",
+        note: "No projected savings with the current assumptions.",
+      };
+    }
+    if (refi.breakEvenMonths <= 24) {
+      return {
+        label: "Strong candidate",
+        note: "Break-even is under 24 months.",
+      };
+    }
+    if (refi.breakEvenMonths <= 48) {
+      return {
+        label: "Moderate",
+        note: "Savings are real, but recovery takes longer.",
+      };
+    }
+    return {
+      label: "Long horizon",
+      note: "Only attractive if you expect to keep the loan for years.",
+    };
+  }, [refi.breakEvenMonths, refi.monthlySavings]);
+
+  const refiSavingsTimeline = useMemo(
+    () =>
+      [12, 24, 36, 60].map((months) => {
+        const gross = refi.monthlySavings * months;
+        const net = gross - refi.closingCosts;
+        return {
+          months,
+          gross,
+          net,
+        };
+      }),
+    [refi.monthlySavings, refi.closingCosts]
+  );
+
+  const shareUrl = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const url = new URL(window.location.href);
+    url.searchParams.set("a", encodeStatePayload(affordInputs));
+    url.searchParams.set("r", encodeStatePayload(refiInputs));
+    url.searchParams.set("calc", activeCalc);
+    return url.toString();
+  }, [affordInputs, refiInputs, activeCalc]);
+
+  const saveScenario = () => {
+    const timestamp = new Date().toISOString();
+    const bestOption = sortedLoanOptions[0] ?? null;
+    const nextScenario = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: `Scenario ${savedScenarios.length + 1}`,
+      createdAt: timestamp,
+      activeCalc,
+      affordInputs,
+      refiInputs,
+      loanTypeId,
+      refiLoanTypeId,
+      rateMode,
+      refiRateMode,
+      quickStats: {
+        homePrice: affordability.estimatedHomePrice,
+        totalMonthly: selectedLoanOption?.totalMonthly ?? 0,
+        breakEvenMonths: refi.breakEvenMonths,
+        monthlySavings: refi.monthlySavings,
+        marketBestRate: bestRatesSnapshot.lowest?.rate ?? null,
+        bestLoanLabel: bestOption?.label ?? null,
+      },
+    };
+    setSavedScenarios((prev) => [nextScenario, ...prev].slice(0, MAX_SCENARIOS));
+  };
+
+  const loadScenario = (scenario) => {
+    setAffordInputs((prev) => ({ ...prev, ...scenario.affordInputs }));
+    setRefiInputs((prev) => ({ ...prev, ...scenario.refiInputs }));
+    if (scenario.loanTypeId) setLoanTypeId(scenario.loanTypeId);
+    if (scenario.refiLoanTypeId) setRefiLoanTypeId(scenario.refiLoanTypeId);
+    if (scenario.rateMode) setRateMode(scenario.rateMode);
+    if (scenario.refiRateMode) setRefiRateMode(scenario.refiRateMode);
+    if (scenario.activeCalc === "afford" || scenario.activeCalc === "refi") {
+      setActiveCalc(scenario.activeCalc);
+    }
+  };
+
+  const deleteScenario = (scenarioId) => {
+    setSavedScenarios((prev) => prev.filter((scenario) => scenario.id !== scenarioId));
+  };
+
+  const applyAffordPreset = (preset) => {
+    setAffordInputs((prev) => ({ ...prev, ...preset.inputs }));
+    setActiveCalc("afford");
+  };
+
+  const applyRefiPreset = (preset) => {
+    setRefiInputs((prev) => ({ ...prev, ...preset.inputs }));
+    setActiveCalc("refi");
+  };
+
+  const copyShareLink = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 1800);
+    } catch {
+      setShareCopied(false);
+    }
+  };
+
+  const shareCurrentState = async () => {
+    if (!shareUrl) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Mortgage planning snapshot",
+          text: "View this affordability and refi snapshot",
+          url: shareUrl,
+        });
+        return;
+      } catch {
+        // Fall back to clipboard when native share is canceled or unavailable.
+      }
+    }
+    await copyShareLink();
+  };
 
   const updateAfford = (key) => (event) => {
     const rawValue = event.target.value;
@@ -881,7 +1381,7 @@ export default function CalculatorPage() {
         : rateNote
         ? `${rateNote.label} (${rateNote.date})`
         : "Live average";
-    const rateSummary =
+    const rateSourceSummaryText =
       rateMode === "credit" ? `${rateSourceSummary} + credit score adjustment` : rateSourceSummary;
     const closingCostsInput = parseNumber(affordInputs.closingCosts);
     const loanTable = `
@@ -940,7 +1440,7 @@ export default function CalculatorPage() {
             value: rateMode === "credit" ? selectedScore.label : "Not used",
           },
           { label: "Estimated rate", value: formatPercent(resolvedRate.rate) },
-          { label: "Rate source", value: rateSummary },
+          { label: "Rate source", value: rateSourceSummaryText },
         ],
       },
       {
@@ -1122,12 +1622,26 @@ export default function CalculatorPage() {
   };
 
   const rateNote = rateData[selectedLoanType.rateSeries];
+  const rateAgeDays = rateFreshnessDays;
+  const rateIsStale = Number.isFinite(rateAgeDays) ? rateAgeDays >= 5 : false;
   const rateNoteLabel =
     rateMode === "manual"
       ? "Using manual rate entry."
       : rateNote
       ? `Base rate from ${rateNote.label} (latest ${rateNote.date}).`
       : "Base rate unavailable.";
+
+  const refreshRates = async () => {
+    setRateRefreshStatus("loading");
+    try {
+      const payload = await fetchRatesFromApi();
+      applyRatesPayload(payload);
+      setRateRefreshStatus("ready");
+      setTimeout(() => setRateRefreshStatus("idle"), 1200);
+    } catch {
+      setRateRefreshStatus("error");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -1160,19 +1674,244 @@ export default function CalculatorPage() {
           <p className="max-w-2xl text-pretty text-sm text-muted-foreground sm:text-base">
             Get a clearer picture of what you can afford and when a refi makes sense.
           </p>
-          <div className="text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {rateStatus === "loading"
               ? "Loading Freddie Mac PMMS averages..."
               : rateStatus === "error"
               ? "Freddie Mac PMMS averages unavailable. Using manual inputs instead."
               : rateNoteLabel}
+            {rateMeta?.fetchedAtIso ? (
+              <span className="rounded-full border bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground">
+                Updated {formatRateDate(rateMeta.fetchedAtIso)}
+              </span>
+            ) : null}
+            {rateIsStale ? (
+              <span className="rounded-full border border-amber-400/40 bg-amber-50/80 px-2 py-0.5 text-[11px] text-amber-700">
+                Rates are {rateAgeDays} days old
+              </span>
+            ) : null}
+            {rateIsStale ? (
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 rounded-full px-3"
+                onClick={refreshRates}
+                disabled={rateRefreshStatus === "loading"}
+              >
+                {rateRefreshStatus === "loading" ? (
+                  "Refreshing..."
+                ) : rateRefreshStatus === "error" ? (
+                  "Retry refresh"
+                ) : (
+                  <>
+                    Refresh live rates
+                    <RefreshCw className="ml-2 h-3.5 w-3.5" />
+                  </>
+                )}
+              </Button>
+            ) : null}
           </div>
         </div>
 
-          <div className="mt-8 flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-full border bg-background/70 p-1">
-              <button
-                type="button"
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          {marketRateCards.map((card) => (
+            <Card key={card.seriesId} className="rounded-3xl">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      {card.label}
+                    </div>
+                    <div className="mt-2 text-2xl font-semibold">
+                      {Number.isFinite(card.rate) ? formatPercent(card.rate) : "N/A"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {card.date ? `Series date: ${card.date}` : "Series unavailable"}
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="rounded-full">
+                    {card.seriesId}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <Card className="rounded-3xl">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Best Rates Board</CardTitle>
+                <Sparkles className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <Badge className="rounded-full" variant="secondary">
+                  Lowest:{" "}
+                  {bestRatesSnapshot.lowest
+                    ? `${bestRatesSnapshot.lowest.bucket} ${formatPercent(bestRatesSnapshot.lowest.rate)}`
+                    : "N/A"}
+                </Badge>
+                <Badge className="rounded-full" variant="secondary">
+                  Spread:{" "}
+                  {Number.isFinite(bestRatesSnapshot.spreadBps)
+                    ? `${bestRatesSnapshot.spreadBps} bps`
+                    : "N/A"}
+                </Badge>
+                <Badge className="rounded-full" variant="secondary">
+                  Source: {rateMeta.source || "FRED"}
+                </Badge>
+              </div>
+              <div className="rounded-2xl border bg-background/60">
+                {bestRatesSnapshot.available.length ? (
+                  <div className="divide-y divide-border/60">
+                    {bestRatesSnapshot.available.map((item, index) => (
+                      <div
+                        key={item.seriesId}
+                        className="grid items-center gap-2 px-4 py-3 text-sm sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]"
+                      >
+                        <div className="grid h-6 w-6 place-items-center rounded-full border bg-muted/30 text-xs">
+                          {index + 1}
+                        </div>
+                        <div className="font-medium">{item.bucket}</div>
+                        <div className="text-muted-foreground">{item.date || "N/A"}</div>
+                        <div className="font-semibold">{formatPercent(item.rate)}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-6 text-sm text-muted-foreground">
+                    Rates are unavailable right now.
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-3xl">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Planner Tools</CardTitle>
+                <Gauge className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button className="rounded-2xl" onClick={saveScenario}>
+                  Save snapshot
+                </Button>
+                <Button variant="outline" className="rounded-2xl" onClick={shareCurrentState}>
+                  Share state
+                  <Share2 className="ml-2 h-4 w-4" />
+                </Button>
+                <Button variant="outline" className="rounded-2xl sm:col-span-2" onClick={copyShareLink}>
+                  {shareCopied ? "Link copied" : "Copy share link"}
+                  <Copy className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Affordability presets
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {AFFORD_PRESETS.map((preset) => (
+                    <Button
+                      key={preset.id}
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="rounded-full"
+                      onClick={() => applyAffordPreset(preset)}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Refi presets
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {REFI_PRESETS.map((preset) => (
+                    <Button
+                      key={preset.id}
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      className="rounded-full"
+                      onClick={() => applyRefiPreset(preset)}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="mt-4 rounded-3xl">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-lg">Saved Scenarios</CardTitle>
+              <Badge variant="secondary" className="rounded-full">
+                {savedScenarios.length}/{MAX_SCENARIOS}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {savedScenarios.length ? (
+              <div className="grid gap-2">
+                {savedScenarios.map((scenario) => (
+                  <div
+                    key={scenario.id}
+                    className="grid gap-3 rounded-2xl border bg-background/60 p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                  >
+                    <div>
+                      <div className="text-sm font-semibold">{scenario.name}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {formatRateDate(scenario.createdAt)} | Home {formatMoney(scenario.quickStats.homePrice || 0)} |
+                        Payment {formatMoney(scenario.quickStats.totalMonthly || 0)} | Refi {scenario.quickStats.breakEvenMonths || 0} mo
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => loadScenario(scenario)}
+                      >
+                        Load
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="rounded-full text-muted-foreground"
+                        onClick={() => deleteScenario(scenario.id)}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Save snapshots while testing rates and assumptions to compare paths quickly.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="mt-8 flex flex-wrap items-center gap-2">
+          <div className="flex items-center rounded-full border bg-background/70 p-1">
+            <button
+              type="button"
               className={`rounded-full px-4 py-2 text-sm font-medium transition ${
                 activeCalc === "afford"
                   ? "bg-primary text-primary-foreground shadow-sm"
@@ -1194,7 +1933,7 @@ export default function CalculatorPage() {
               Refi break-even
             </button>
           </div>
-          </div>
+        </div>
 
         <div className="mt-6 grid gap-6">
           {activeCalc === "afford" ? (
@@ -1458,7 +2197,46 @@ export default function CalculatorPage() {
                 </div>
               </div>
 
-                <div className="rounded-2xl border bg-background/70 p-4 text-sm text-muted-foreground">
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="rounded-2xl border bg-background/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Affordability health
+                    </div>
+                    <Badge variant="secondary" className="rounded-full">
+                      {affordabilityHealth.label}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 text-sm text-muted-foreground">{affordabilityHealth.note}</div>
+                  <div className="mt-3 text-sm font-medium text-foreground">
+                    Payment-to-income ratio: {formatRatioPercent(affordabilityHealth.ratio || 0)}
+                  </div>
+                </div>
+                <div className="rounded-2xl border bg-background/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Top loan fits
+                    </div>
+                    <TrendingDown className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="mt-2 grid gap-2">
+                    {sortedLoanOptions.slice(0, 3).map((option, index) => (
+                      <div
+                        key={option.id}
+                        className="grid items-center gap-2 rounded-xl border bg-muted/20 px-3 py-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+                      >
+                        <span className="text-xs text-muted-foreground">#{index + 1}</span>
+                        <span className="font-medium">{option.label}</span>
+                        <span className="text-muted-foreground">
+                          {formatPercent(option.rate)} | {formatMoney(option.totalMonthly)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border bg-background/70 p-4 text-sm text-muted-foreground">
                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                   Breakdown
                 </div>
@@ -1717,6 +2495,42 @@ export default function CalculatorPage() {
               </div>
               <div className="text-xs text-muted-foreground">
                 New rate estimates use Freddie Mac PMMS averages unless overridden.
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="rounded-2xl border bg-background/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Refi outlook
+                    </div>
+                    <Badge variant="secondary" className="rounded-full">
+                      {refiRecommendation.label}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 text-sm text-muted-foreground">{refiRecommendation.note}</div>
+                  <div className="mt-3 text-sm font-medium text-foreground">
+                    Break-even target: {refi.breakEvenMonths > 0 ? `${refi.breakEvenMonths} months` : "Not reached"}
+                  </div>
+                </div>
+                <div className="rounded-2xl border bg-background/70 p-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Savings timeline
+                  </div>
+                  <div className="mt-2 grid gap-2">
+                    {refiSavingsTimeline.map((point) => (
+                      <div
+                        key={point.months}
+                        className="grid items-center gap-2 rounded-xl border bg-muted/20 px-3 py-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+                      >
+                        <span className="font-medium">{point.months} mo</span>
+                        <span className="text-muted-foreground">Net after costs</span>
+                        <span className={point.net >= 0 ? "font-medium text-emerald-700 dark:text-emerald-400" : "font-medium text-amber-700 dark:text-amber-300"}>
+                          {formatMoney(point.net)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="rounded-2xl border bg-background/70 p-4 text-sm text-muted-foreground">

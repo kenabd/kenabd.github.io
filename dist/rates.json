@@ -1,29 +1,29 @@
 {
   "version": 2,
-  "fetchedAt": 1770530155082,
-  "fetchedAtIso": "2026-02-08T05:55:55.082Z",
+  "fetchedAt": 1770529411523,
+  "fetchedAtIso": "2026-02-08T05:43:31.523Z",
   "source": "FRED",
   "data": {
     "MORTGAGE30US": {
       "date": "2026-02-05",
       "rate": 6.11,
-      "sourceSeriesId": "MORTGAGE30US",
       "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
-      "bucket": "30Y fixed"
+      "bucket": "30Y fixed",
+      "sourceSeriesId": "MORTGAGE30US"
     },
     "MORTGAGE15US": {
       "date": "2026-02-05",
       "rate": 5.5,
-      "sourceSeriesId": "MORTGAGE15US",
       "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
-      "bucket": "15Y fixed"
+      "bucket": "15Y fixed",
+      "sourceSeriesId": "MORTGAGE15US"
     },
     "MORTGAGE5US": {
       "date": "2022-11-10",
       "rate": 6.06,
-      "sourceSeriesId": "MORTGAGE5US",
       "label": "Freddie Mac 5/1 ARM (PMMS via FRED)",
-      "bucket": "5/1 ARM"
+      "bucket": "5/1 ARM",
+      "sourceSeriesId": "MORTGAGE5US"
     }
   },
   "summary": {
