@@ -1,14 +1,14 @@
 {
-  "fetchedAt": 1769397154421,
+  "fetchedAt": 1770523817331,
   "data": {
     "MORTGAGE30US": {
-      "date": "2026-01-22",
-      "rate": 6.09,
+      "date": "2026-02-05",
+      "rate": 6.11,
       "label": "Freddie Mac 30Y fixed (PMMS via FRED)"
     },
     "MORTGAGE15US": {
-      "date": "2026-01-22",
-      "rate": 5.44,
+      "date": "2026-02-05",
+      "rate": 5.5,
       "label": "Freddie Mac 15Y fixed (PMMS via FRED)"
     }
   }
