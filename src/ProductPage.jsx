@@ -56,6 +56,9 @@ const RATE_CACHE_KEY = "calculator.rateCache.v2";
 const RATE_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 const hasRateData = (data) => data && Object.keys(data).length > 0;
 const DEFAULT_LIVE_RATE_SERIES = "MORTGAGE30US";
+const BASE_RATE_SERIES_FALLBACK = {
+  MORTGAGE5US: DEFAULT_LIVE_RATE_SERIES,
+};
 const PMI_RATE_DEFAULT = 0.006;
 const SCENARIO_STORAGE_KEY = "calculator.savedScenarios.v1";
 const MAX_SCENARIOS = 6;
@@ -262,17 +265,32 @@ const parseFredCsv = (text) => {
   return null;
 };
 
+const parseCalendarDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})(?:$|T)/);
+  if (match) {
+    const date = new Date(`${match[1]}T12:00:00.000Z`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const fallback = new Date(raw);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+};
+
 const formatRateDate = (value) => {
-  if (!value) return "Unknown";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
+  const date = parseCalendarDate(value);
+  if (!date) return "Unknown";
   return monthFormatter.format(date);
 };
 
 const daysSince = (value) => {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
+  const date = parseCalendarDate(value);
+  if (!date) return null;
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24)));
 };
 
@@ -326,6 +344,8 @@ const normalizeRatesPayload = (payload) => {
     },
   };
 };
+
+const getBaseRateSeriesId = (seriesId) => BASE_RATE_SERIES_FALLBACK[seriesId] || seriesId;
 
 const encodeStatePayload = (value) => {
   try {
@@ -931,7 +951,8 @@ export default function CalculatorPage() {
 
   const resolvedRate = useMemo(() => {
     const manualRate = parseNumber(affordInputs.rate);
-    const selectedLiveRate = rateData[selectedLoanType.rateSeries];
+    const selectedBaseSeriesId = getBaseRateSeriesId(selectedLoanType.rateSeries);
+    const selectedLiveRate = rateData[selectedBaseSeriesId];
     const defaultLiveRate = rateData[DEFAULT_LIVE_RATE_SERIES];
     const activeLiveRate =
       selectedLiveRate && Number.isFinite(selectedLiveRate.rate) && !selectedLiveRate.isStale
@@ -954,7 +975,8 @@ export default function CalculatorPage() {
   const resolveRateForLoan = useCallback(
     (loan) => {
       const manualRate = parseNumber(affordInputs.rate);
-      const selectedLiveRate = rateData[loan.rateSeries];
+      const selectedBaseSeriesId = getBaseRateSeriesId(loan.rateSeries);
+      const selectedLiveRate = rateData[selectedBaseSeriesId];
       const defaultLiveRate = rateData[DEFAULT_LIVE_RATE_SERIES];
       const activeLiveRate =
         selectedLiveRate && Number.isFinite(selectedLiveRate.rate) && !selectedLiveRate.isStale
@@ -972,7 +994,8 @@ export default function CalculatorPage() {
 
   const resolveRefiRate = useCallback(() => {
     const manualRate = parseNumber(refiInputs.newRate);
-    const selectedLiveRate = rateData[selectedRefiLoanType.rateSeries];
+    const selectedBaseSeriesId = getBaseRateSeriesId(selectedRefiLoanType.rateSeries);
+    const selectedLiveRate = rateData[selectedBaseSeriesId];
     const defaultLiveRate = rateData[DEFAULT_LIVE_RATE_SERIES];
     const activeLiveRate =
       selectedLiveRate && Number.isFinite(selectedLiveRate.rate) && !selectedLiveRate.isStale
@@ -1023,6 +1046,7 @@ export default function CalculatorPage() {
         id: loan.id,
         label: loan.label,
         rate,
+        amortizationYears: loan.amortizationYears,
         loanAmount,
         homePrice,
         pmiMonthly,
@@ -1134,6 +1158,45 @@ export default function CalculatorPage() {
     pmiRateOverride,
     taxRateOverride,
   ]);
+
+  const topLoanFits = useMemo(() => {
+    const targetHomePrice = affordability.estimatedHomePrice;
+    if (!Number.isFinite(targetHomePrice) || targetHomePrice <= 0) {
+      return sortedLoanOptions.slice(0, 3).map((option) => ({
+        ...option,
+        comparableTotalMonthly: option.totalMonthly,
+      }));
+    }
+
+    const loanAmount = Math.max(0, targetHomePrice - affordability.downPayment);
+    const ltv = targetHomePrice > 0 ? loanAmount / targetHomePrice : 0;
+    const pmiMonthly = ltv > 0.8 ? (loanAmount * affordability.pmiAnnualRate) / 12 : 0;
+    const propertyTaxMonthly =
+      affordability.taxRate > 0 ? (targetHomePrice * affordability.taxRate) / 12 : 0;
+
+    return sortedLoanOptions
+      .map((option) => {
+        const monthlyPI = monthlyPayment(loanAmount, option.rate, option.amortizationYears || 30);
+        const comparableTotalMonthly =
+          monthlyPI +
+          affordability.insuranceMonthly +
+          affordability.hoaMonthly +
+          propertyTaxMonthly +
+          pmiMonthly;
+
+        return {
+          ...option,
+          comparableTotalMonthly,
+        };
+      })
+      .sort(
+        (a, b) =>
+          a.comparableTotalMonthly - b.comparableTotalMonthly ||
+          a.rate - b.rate ||
+          b.homePrice - a.homePrice
+      )
+      .slice(0, 3);
+  }, [affordability, sortedLoanOptions]);
 
   const refi = useMemo(() => {
     const balance = parseNumber(refiInputs.balance);
@@ -1642,7 +1705,7 @@ export default function CalculatorPage() {
     ]);
   };
 
-  const selectedRateNote = rateData[selectedLoanType.rateSeries];
+  const selectedRateNote = rateData[getBaseRateSeriesId(selectedLoanType.rateSeries)];
   const defaultRateNote = rateData[DEFAULT_LIVE_RATE_SERIES];
   const rateNote =
     selectedRateNote && Number.isFinite(selectedRateNote.rate) && !selectedRateNote.isStale
@@ -2252,7 +2315,7 @@ export default function CalculatorPage() {
                     <TrendingDown className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="mt-2 grid gap-2">
-                    {sortedLoanOptions.slice(0, 3).map((option, index) => (
+                    {topLoanFits.map((option, index) => (
                       <div
                         key={option.id}
                         className="grid items-center gap-2 rounded-xl border bg-muted/20 px-3 py-2 text-sm sm:grid-cols-[auto_minmax(0,1fr)_auto]"
@@ -2260,7 +2323,7 @@ export default function CalculatorPage() {
                         <span className="text-xs text-muted-foreground">#{index + 1}</span>
                         <span className="font-medium">{option.label}</span>
                         <span className="text-muted-foreground">
-                          {formatPercent(option.rate)} | {formatMoney(option.totalMonthly)}
+                          {formatPercent(option.rate)} | {formatMoney(option.comparableTotalMonthly)}
                         </span>
                       </div>
                     ))}
