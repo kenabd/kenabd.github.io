@@ -1160,9 +1160,15 @@ export default function CalculatorPage() {
   ]);
 
   const topLoanFits = useMemo(() => {
+    const comparableBase = [...loanOptions].sort(
+      (a, b) =>
+        a.rate - b.rate ||
+        a.totalMonthly - b.totalMonthly ||
+        b.homePrice - a.homePrice
+    );
     const targetHomePrice = affordability.estimatedHomePrice;
     if (!Number.isFinite(targetHomePrice) || targetHomePrice <= 0) {
-      return sortedLoanOptions.slice(0, 3).map((option) => ({
+      return comparableBase.slice(0, 3).map((option) => ({
         ...option,
         comparableTotalMonthly: option.totalMonthly,
       }));
@@ -1174,7 +1180,7 @@ export default function CalculatorPage() {
     const propertyTaxMonthly =
       affordability.taxRate > 0 ? (targetHomePrice * affordability.taxRate) / 12 : 0;
 
-    return sortedLoanOptions
+    return comparableBase
       .map((option) => {
         const monthlyPI = monthlyPayment(loanAmount, option.rate, option.amortizationYears || 30);
         const comparableTotalMonthly =
@@ -1196,7 +1202,7 @@ export default function CalculatorPage() {
           b.homePrice - a.homePrice
       )
       .slice(0, 3);
-  }, [affordability, sortedLoanOptions]);
+  }, [affordability, loanOptions]);
 
   const refi = useMemo(() => {
     const balance = parseNumber(refiInputs.balance);
