@@ -287,12 +287,6 @@ const formatRateDate = (value) => {
   return monthFormatter.format(date);
 };
 
-const daysSince = (value) => {
-  const date = parseCalendarDate(value);
-  if (!date) return null;
-  return Math.max(0, Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24)));
-};
-
 const buildBestRatesSummary = (data) => {
   const available = Object.entries(data || {})
     .filter(([, item]) => Number.isFinite(item?.rate))
@@ -1281,17 +1275,6 @@ export default function CalculatorPage() {
     return buildBestRatesSummary(rateData);
   }, [rateSummary, rateData]);
 
-  const rateFreshnessDays = useMemo(
-    () =>
-      daysSince(
-        rateMeta.sourceAsOfIso ||
-          (rateMeta.sourceAsOf ? new Date(rateMeta.sourceAsOf).toISOString() : null) ||
-          rateMeta.fetchedAtIso ||
-          (rateMeta.fetchedAt ? new Date(rateMeta.fetchedAt).toISOString() : null)
-      ),
-    [rateMeta]
-  );
-
   const marketRateCards = useMemo(
     () =>
       MARKET_RATE_CARDS.map((card) => {
@@ -1728,8 +1711,6 @@ export default function CalculatorPage() {
       : defaultRateNote && Number.isFinite(defaultRateNote.rate)
       ? defaultRateNote
       : selectedRateNote;
-  const rateAgeDays = rateFreshnessDays;
-  const rateIsStale = Number.isFinite(rateAgeDays) ? rateAgeDays >= 5 : false;
   const rateNoteLabel =
     rateMode === "manual"
       ? "Using manual rate entry."
@@ -1777,11 +1758,6 @@ export default function CalculatorPage() {
             {rateMeta?.fetchedAtIso ? (
               <span className="rounded-full border bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground">
                 Updated {formatRateDate(rateMeta.fetchedAtIso)}
-              </span>
-            ) : null}
-            {rateIsStale ? (
-              <span className="rounded-full border border-amber-400/40 bg-amber-50/80 px-2 py-0.5 text-[11px] text-amber-700">
-                Rates are {rateAgeDays} days old
               </span>
             ) : null}
           </div>
