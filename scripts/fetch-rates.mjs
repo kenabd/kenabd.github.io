@@ -5,6 +5,8 @@ import fs from "node:fs/promises";
 const RATE_COSD = new Date(Date.now() - 1000 * 60 * 60 * 24 * 30)
   .toISOString()
   .slice(0, 10);
+const RATE_STALE_DAYS = 35;
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 const SERIES_CONFIG = [
   {
@@ -89,6 +91,8 @@ const buildBestRatesSummary = (data) => {
       bucket: value.bucket,
       rate: value.rate,
       date: value.date,
+      isStale: value.isStale ?? false,
+      staleDays: Number.isFinite(value.staleDays) ? value.staleDays : null,
     }))
     .sort((a, b) => a.rate - b.rate);
 
@@ -101,16 +105,44 @@ const buildBestRatesSummary = (data) => {
     };
   }
 
-  const lowest = entries[0];
-  const highest = entries[entries.length - 1];
+  const freshEntries = entries.filter((entry) => !entry.isStale);
+  const available = freshEntries.length ? freshEntries : entries;
+  const lowest = available[0];
+  const highest = available[available.length - 1];
   const spreadBps = Math.round((highest.rate - lowest.rate) * 100);
 
   return {
-    available: entries,
+    available,
     lowest,
     highest,
     spreadBps,
   };
+};
+
+const parseSeriesDateToUtc = (value) => {
+  if (!value || typeof value !== "string") return null;
+  const timestamp = Date.parse(`${value}T00:00:00.000Z`);
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+const staleDaysFromDate = (value, nowTs) => {
+  const dateTs = parseSeriesDateToUtc(value);
+  if (!Number.isFinite(dateTs)) return null;
+  return Math.max(0, Math.floor((nowTs - dateTs) / MS_PER_DAY));
+};
+
+const latestSeriesDate = (entries) => {
+  let bestTs = null;
+  let bestDate = null;
+  for (const entry of entries) {
+    const ts = parseSeriesDateToUtc(entry?.date);
+    if (!Number.isFinite(ts)) continue;
+    if (bestTs === null || ts > bestTs) {
+      bestTs = ts;
+      bestDate = entry.date;
+    }
+  }
+  return bestDate;
 };
 
 const run = async () => {
@@ -121,11 +153,22 @@ const run = async () => {
     throw new Error("No rate series could be fetched from FRED.");
   }
 
-  const now = new Date();
+  const nowTs = Date.now();
+  for (const value of Object.values(data)) {
+    const staleDays = staleDaysFromDate(value.date, nowTs);
+    value.staleDays = staleDays;
+    value.isStale = !Number.isFinite(staleDays) || staleDays > RATE_STALE_DAYS;
+  }
+
+  const freshEntries = Object.values(data).filter((value) => !value.isStale);
+  const fetchedDate =
+    latestSeriesDate(freshEntries) || latestSeriesDate(Object.values(data)) || new Date(nowTs).toISOString().slice(0, 10);
+  const fetchedAt = parseSeriesDateToUtc(fetchedDate) ?? nowTs;
+
   const payload = {
-    version: 2,
-    fetchedAt: now.getTime(),
-    fetchedAtIso: now.toISOString(),
+    version: 3,
+    fetchedAt,
+    fetchedAtIso: new Date(fetchedAt).toISOString(),
     source: "FRED",
     data,
     summary: {
@@ -137,9 +180,9 @@ const run = async () => {
   await fs.writeFile("public/rates.json", JSON.stringify(payload, null, 2));
 
   const available = payload.summary.bestRates.available
-    .map((entry) => `${entry.bucket}:${entry.rate.toFixed(2)}%`)
+    .map((entry) => `${entry.bucket}:${entry.rate.toFixed(2)}%${entry.isStale ? " (stale)" : ""}`)
     .join(", ");
-  console.log(`Wrote public/rates.json (${available})`);
+  console.log(`Wrote public/rates.json (${payload.fetchedAtIso.slice(0, 10)} | ${available})`);
 };
 
 run().catch((error) => {
