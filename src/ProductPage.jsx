@@ -55,6 +55,7 @@ const MARKET_RATE_CARDS = [
 const RATE_CACHE_KEY = "calculator.rateCache.v2";
 const RATE_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 const hasRateData = (data) => data && Object.keys(data).length > 0;
+const DEFAULT_LIVE_RATE_SERIES = "MORTGAGE30US";
 const PMI_RATE_DEFAULT = 0.006;
 const SCENARIO_STORAGE_KEY = "calculator.savedScenarios.v1";
 const MAX_SCENARIOS = 6;
@@ -930,7 +931,15 @@ export default function CalculatorPage() {
 
   const resolvedRate = useMemo(() => {
     const manualRate = parseNumber(affordInputs.rate);
-    const baseRate = rateData[selectedLoanType.rateSeries]?.rate ?? manualRate;
+    const selectedLiveRate = rateData[selectedLoanType.rateSeries];
+    const defaultLiveRate = rateData[DEFAULT_LIVE_RATE_SERIES];
+    const activeLiveRate =
+      selectedLiveRate && Number.isFinite(selectedLiveRate.rate) && !selectedLiveRate.isStale
+        ? selectedLiveRate
+        : defaultLiveRate && Number.isFinite(defaultLiveRate.rate)
+        ? defaultLiveRate
+        : selectedLiveRate;
+    const baseRate = rateMode === "manual" ? manualRate : activeLiveRate?.rate ?? manualRate;
     const loanAdjust = selectedLoanType.rateAdjust;
     const scoreAdjust = rateMode === "credit" ? selectedScore.adjust : 0;
 
@@ -945,8 +954,15 @@ export default function CalculatorPage() {
   const resolveRateForLoan = useCallback(
     (loan) => {
       const manualRate = parseNumber(affordInputs.rate);
-      const baseRate =
-        rateMode === "manual" ? manualRate : rateData[loan.rateSeries]?.rate ?? manualRate;
+      const selectedLiveRate = rateData[loan.rateSeries];
+      const defaultLiveRate = rateData[DEFAULT_LIVE_RATE_SERIES];
+      const activeLiveRate =
+        selectedLiveRate && Number.isFinite(selectedLiveRate.rate) && !selectedLiveRate.isStale
+          ? selectedLiveRate
+          : defaultLiveRate && Number.isFinite(defaultLiveRate.rate)
+          ? defaultLiveRate
+          : selectedLiveRate;
+      const baseRate = rateMode === "manual" ? manualRate : activeLiveRate?.rate ?? manualRate;
       const scoreAdjust = rateMode === "credit" ? selectedScore.adjust : 0;
       const rate = baseRate + loan.rateAdjust + scoreAdjust;
       return { rate, baseRate, scoreAdjust };
@@ -956,10 +972,15 @@ export default function CalculatorPage() {
 
   const resolveRefiRate = useCallback(() => {
     const manualRate = parseNumber(refiInputs.newRate);
-    const baseRate =
-      refiRateMode === "manual"
-        ? manualRate
-        : rateData[selectedRefiLoanType.rateSeries]?.rate ?? manualRate;
+    const selectedLiveRate = rateData[selectedRefiLoanType.rateSeries];
+    const defaultLiveRate = rateData[DEFAULT_LIVE_RATE_SERIES];
+    const activeLiveRate =
+      selectedLiveRate && Number.isFinite(selectedLiveRate.rate) && !selectedLiveRate.isStale
+        ? selectedLiveRate
+        : defaultLiveRate && Number.isFinite(defaultLiveRate.rate)
+        ? defaultLiveRate
+        : selectedLiveRate;
+    const baseRate = refiRateMode === "manual" ? manualRate : activeLiveRate?.rate ?? manualRate;
     const scoreAdjust = refiRateMode === "credit" ? selectedRefiScore.adjust : 0;
     const rate = baseRate + selectedRefiLoanType.rateAdjust + scoreAdjust;
     return { rate, baseRate, scoreAdjust };
@@ -1621,7 +1642,14 @@ export default function CalculatorPage() {
     ]);
   };
 
-  const rateNote = rateData[selectedLoanType.rateSeries];
+  const selectedRateNote = rateData[selectedLoanType.rateSeries];
+  const defaultRateNote = rateData[DEFAULT_LIVE_RATE_SERIES];
+  const rateNote =
+    selectedRateNote && Number.isFinite(selectedRateNote.rate) && !selectedRateNote.isStale
+      ? selectedRateNote
+      : defaultRateNote && Number.isFinite(defaultRateNote.rate)
+      ? defaultRateNote
+      : selectedRateNote;
   const rateAgeDays = rateFreshnessDays;
   const rateIsStale = Number.isFinite(rateAgeDays) ? rateAgeDays >= 5 : false;
   const rateNoteLabel =
@@ -1711,6 +1739,10 @@ export default function CalculatorPage() {
               </Button>
             ) : null}
           </div>
+          <p className="max-w-3xl text-xs text-muted-foreground">
+            For informational purposes only. This calculator provides estimates and is not financial advice.
+            Consult a licensed financial advisor as needed.
+          </p>
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
