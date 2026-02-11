@@ -6,7 +6,6 @@ import {
   Gauge,
   Home,
   Moon,
-  RefreshCw,
   RotateCcw,
   Share2,
   Sparkles,
@@ -325,19 +324,44 @@ const buildBestRatesSummary = (data) => {
   };
 };
 
+const deriveLatestSeriesDate = (data) => {
+  if (!data || typeof data !== "object") return null;
+  let latest = null;
+  for (const value of Object.values(data)) {
+    const raw = value?.date;
+    if (typeof raw !== "string") continue;
+    const normalized = raw.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) continue;
+    if (!latest || normalized > latest) latest = normalized;
+  }
+  return latest;
+};
+
 const normalizeRatesPayload = (payload) => {
   const data = payload?.data && typeof payload.data === "object" ? payload.data : {};
+  const latestSeriesDate = deriveLatestSeriesDate(data);
   const fetchedAt =
     typeof payload?.fetchedAt === "number" && Number.isFinite(payload.fetchedAt)
       ? payload.fetchedAt
       : Date.now();
   const fetchedAtIso = payload?.fetchedAtIso || new Date(fetchedAt).toISOString();
+  const sourceAsOf =
+    typeof payload?.sourceAsOf === "number" && Number.isFinite(payload.sourceAsOf)
+      ? payload.sourceAsOf
+      : latestSeriesDate
+      ? Date.parse(`${latestSeriesDate}T00:00:00.000Z`)
+      : fetchedAt;
+  const sourceAsOfIso =
+    payload?.sourceAsOfIso ||
+    (Number.isFinite(sourceAsOf) ? new Date(sourceAsOf).toISOString() : fetchedAtIso);
   const bestRates = payload?.summary?.bestRates || buildBestRatesSummary(data);
 
   return {
     data,
     fetchedAt,
     fetchedAtIso,
+    sourceAsOf,
+    sourceAsOfIso,
     source: payload?.source || "FRED",
     summary: {
       bestRates,
@@ -663,12 +687,17 @@ export default function CalculatorPage() {
   const [pmiRateOverride, setPmiRateOverride] = useState("");
   const [taxRateOverride, setTaxRateOverride] = useState("");
   const [rateData, setRateData] = useState({});
-  const [rateMeta, setRateMeta] = useState({ fetchedAt: null, fetchedAtIso: null, source: "FRED" });
+  const [rateMeta, setRateMeta] = useState({
+    fetchedAt: null,
+    fetchedAtIso: null,
+    sourceAsOf: null,
+    sourceAsOfIso: null,
+    source: "FRED",
+  });
   const [rateSummary, setRateSummary] = useState({
     bestRates: { available: [], lowest: null, highest: null, spreadBps: null },
   });
   const [rateStatus, setRateStatus] = useState("idle");
-  const [rateRefreshStatus, setRateRefreshStatus] = useState("idle");
   const [taxStatus, setTaxStatus] = useState("idle");
   const [taxRate, setTaxRate] = useState(0);
   const [taxMeta, setTaxMeta] = useState(null);
@@ -709,6 +738,8 @@ export default function CalculatorPage() {
     setRateMeta({
       fetchedAt: payload.fetchedAt ?? null,
       fetchedAtIso: payload.fetchedAtIso ?? null,
+      sourceAsOf: payload.sourceAsOf ?? null,
+      sourceAsOfIso: payload.sourceAsOfIso ?? null,
       source: payload.source || "FRED",
     });
     setRateSummary(payload.summary);
@@ -720,6 +751,9 @@ export default function CalculatorPage() {
         JSON.stringify({
           fetchedAt: payload.fetchedAt ?? Date.now(),
           fetchedAtIso: payload.fetchedAtIso ?? new Date().toISOString(),
+          sourceAsOf: payload.sourceAsOf ?? payload.fetchedAt ?? Date.now(),
+          sourceAsOfIso:
+            payload.sourceAsOfIso ?? payload.fetchedAtIso ?? new Date(payload.fetchedAt ?? Date.now()).toISOString(),
           source: payload.source || "FRED",
           summary: payload.summary,
           data: payload.data,
@@ -728,31 +762,6 @@ export default function CalculatorPage() {
     }
 
     return true;
-  };
-
-  const fetchRatesFromApi = async () => {
-    const entries = await Promise.all(
-      Object.keys(RATE_SOURCES).map(async (seriesId) => {
-        const parsed = await fetchRateWithAliases(seriesId);
-        if (!parsed) return null;
-        return [seriesId, parsed];
-      })
-    );
-
-    const data = Object.fromEntries(entries.filter(Boolean));
-    if (!hasRateData(data)) {
-      throw new Error("No API rates available.");
-    }
-
-    return normalizeRatesPayload({
-      fetchedAt: Date.now(),
-      fetchedAtIso: new Date().toISOString(),
-      source: "FRED",
-      data,
-      summary: {
-        bestRates: buildBestRatesSummary(data),
-      },
-    });
   };
 
   useEffect(() => {
@@ -858,13 +867,7 @@ export default function CalculatorPage() {
 
       const hasServerCache = await loadServerCache();
       if (hasServerCache || hasLocalCache) return;
-
-      try {
-        const apiPayload = await fetchRatesFromApi();
-        applyRatesPayload(apiPayload);
-      } catch {
-        setRateStatus("error");
-      }
+      setRateStatus("error");
     };
 
     fetchRates();
@@ -1279,7 +1282,13 @@ export default function CalculatorPage() {
   }, [rateSummary, rateData]);
 
   const rateFreshnessDays = useMemo(
-    () => daysSince(rateMeta.fetchedAtIso || (rateMeta.fetchedAt ? new Date(rateMeta.fetchedAt).toISOString() : null)),
+    () =>
+      daysSince(
+        rateMeta.sourceAsOfIso ||
+          (rateMeta.sourceAsOf ? new Date(rateMeta.sourceAsOf).toISOString() : null) ||
+          rateMeta.fetchedAtIso ||
+          (rateMeta.fetchedAt ? new Date(rateMeta.fetchedAt).toISOString() : null)
+      ),
     [rateMeta]
   );
 
@@ -1728,18 +1737,6 @@ export default function CalculatorPage() {
       ? `Base rate from ${rateNote.label} (latest ${rateNote.date}).`
       : "Base rate unavailable.";
 
-  const refreshRates = async () => {
-    setRateRefreshStatus("loading");
-    try {
-      const payload = await fetchRatesFromApi();
-      applyRatesPayload(payload);
-      setRateRefreshStatus("ready");
-      setTimeout(() => setRateRefreshStatus("idle"), 1200);
-    } catch {
-      setRateRefreshStatus("error");
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
@@ -1786,26 +1783,6 @@ export default function CalculatorPage() {
               <span className="rounded-full border border-amber-400/40 bg-amber-50/80 px-2 py-0.5 text-[11px] text-amber-700">
                 Rates are {rateAgeDays} days old
               </span>
-            ) : null}
-            {rateIsStale ? (
-              <Button
-                type="button"
-                size="sm"
-                className="h-7 rounded-full px-3"
-                onClick={refreshRates}
-                disabled={rateRefreshStatus === "loading"}
-              >
-                {rateRefreshStatus === "loading" ? (
-                  "Refreshing..."
-                ) : rateRefreshStatus === "error" ? (
-                  "Retry refresh"
-                ) : (
-                  <>
-                    Refresh live rates
-                    <RefreshCw className="ml-2 h-3.5 w-3.5" />
-                  </>
-                )}
-              </Button>
             ) : null}
           </div>
           <p className="max-w-3xl text-xs text-muted-foreground">

@@ -161,14 +161,17 @@ const run = async () => {
   }
 
   const freshEntries = Object.values(data).filter((value) => !value.isStale);
-  const fetchedDate =
+  const sourceAsOfDate =
     latestSeriesDate(freshEntries) || latestSeriesDate(Object.values(data)) || new Date(nowTs).toISOString().slice(0, 10);
-  const fetchedAt = parseSeriesDateToUtc(fetchedDate) ?? nowTs;
+  const sourceAsOf = parseSeriesDateToUtc(sourceAsOfDate) ?? nowTs;
+  const fetchedAt = nowTs;
 
   const payload = {
     version: 3,
     fetchedAt,
-    fetchedAtIso: new Date(fetchedAt).toISOString(),
+    fetchedAtIso: new Date(nowTs).toISOString(),
+    sourceAsOf,
+    sourceAsOfIso: new Date(sourceAsOf).toISOString(),
     source: "FRED",
     data,
     summary: {
@@ -182,7 +185,9 @@ const run = async () => {
   const available = payload.summary.bestRates.available
     .map((entry) => `${entry.bucket}:${entry.rate.toFixed(2)}%${entry.isStale ? " (stale)" : ""}`)
     .join(", ");
-  console.log(`Wrote public/rates.json (${payload.fetchedAtIso.slice(0, 10)} | ${available})`);
+  console.log(
+    `Wrote public/rates.json (fetched ${payload.fetchedAtIso.slice(0, 10)} | source ${payload.sourceAsOfIso.slice(0, 10)} | ${available})`
+  );
 };
 
 run().catch((error) => {
