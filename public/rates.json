@@ -1,17 +1,17 @@
 {
   "version": 3,
-  "fetchedAt": 1770973273800,
-  "fetchedAtIso": "2026-02-13T09:01:13.800Z",
+  "fetchedAt": 1770975963091,
+  "fetchedAtIso": "2026-02-13T09:46:03.091Z",
   "sourceAsOf": 1770854400000,
   "sourceAsOfIso": "2026-02-12T00:00:00.000Z",
   "source": "FRED",
   "data": {
-    "MORTGAGE15US": {
+    "MORTGAGE30US": {
       "date": "2026-02-12",
-      "rate": 5.44,
-      "sourceSeriesId": "MORTGAGE15US",
-      "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
-      "bucket": "15Y fixed",
+      "rate": 6.09,
+      "sourceSeriesId": "MORTGAGE30US",
+      "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
+      "bucket": "30Y fixed",
       "staleDays": 1,
       "isStale": false
     }
@@ -20,29 +20,29 @@
     "bestRates": {
       "available": [
         {
-          "id": "MORTGAGE15US",
-          "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
-          "bucket": "15Y fixed",
-          "rate": 5.44,
+          "id": "MORTGAGE30US",
+          "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
+          "bucket": "30Y fixed",
+          "rate": 6.09,
           "date": "2026-02-12",
           "isStale": false,
           "staleDays": 1
         }
       ],
       "lowest": {
-        "id": "MORTGAGE15US",
-        "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
-        "bucket": "15Y fixed",
-        "rate": 5.44,
+        "id": "MORTGAGE30US",
+        "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
+        "bucket": "30Y fixed",
+        "rate": 6.09,
         "date": "2026-02-12",
         "isStale": false,
         "staleDays": 1
       },
       "highest": {
-        "id": "MORTGAGE15US",
-        "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
-        "bucket": "15Y fixed",
-        "rate": 5.44,
+        "id": "MORTGAGE30US",
+        "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
+        "bucket": "30Y fixed",
+        "rate": 6.09,
         "date": "2026-02-12",
         "isStale": false,
         "staleDays": 1
