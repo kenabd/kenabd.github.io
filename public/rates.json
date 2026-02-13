@@ -1,7 +1,7 @@
 {
   "version": 3,
-  "fetchedAt": 1770978527614,
-  "fetchedAtIso": "2026-02-13T10:28:47.614Z",
+  "fetchedAt": 1770980851803,
+  "fetchedAtIso": "2026-02-13T11:07:31.803Z",
   "sourceAsOf": 1770854400000,
   "sourceAsOfIso": "2026-02-12T00:00:00.000Z",
   "source": "FRED",
@@ -23,6 +23,15 @@
       "bucket": "15Y fixed",
       "staleDays": 1,
       "isStale": false
+    },
+    "MORTGAGE5US": {
+      "date": "2022-11-10",
+      "rate": 6.06,
+      "sourceSeriesId": "MORTGAGE5US",
+      "label": "Freddie Mac 5/1 ARM (PMMS via FRED)",
+      "bucket": "5/1 ARM",
+      "staleDays": 1191,
+      "isStale": true
     }
   },
   "summary": {
