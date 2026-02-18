@@ -1,7 +1,7 @@
 {
   "version": 3,
-  "fetchedAt": 1771372192680,
-  "fetchedAtIso": "2026-02-17T23:49:52.680Z",
+  "fetchedAt": 1771376752214,
+  "fetchedAtIso": "2026-02-18T01:05:52.214Z",
   "sourceAsOf": 1770854400000,
   "sourceAsOfIso": "2026-02-12T00:00:00.000Z",
   "source": "FRED",
@@ -12,16 +12,7 @@
       "sourceSeriesId": "MORTGAGE30US",
       "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
       "bucket": "30Y fixed",
-      "staleDays": 5,
-      "isStale": false
-    },
-    "MORTGAGE15US": {
-      "date": "2026-02-12",
-      "rate": 5.44,
-      "sourceSeriesId": "MORTGAGE15US",
-      "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
-      "bucket": "15Y fixed",
-      "staleDays": 5,
+      "staleDays": 6,
       "isStale": false
     },
     "MORTGAGE5US": {
@@ -30,7 +21,7 @@
       "sourceSeriesId": "MORTGAGE5US",
       "label": "Freddie Mac 5/1 ARM (PMMS via FRED)",
       "bucket": "5/1 ARM",
-      "staleDays": 1195,
+      "staleDays": 1196,
       "isStale": true
     }
   },
@@ -38,32 +29,23 @@
     "bestRates": {
       "available": [
         {
-          "id": "MORTGAGE15US",
-          "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
-          "bucket": "15Y fixed",
-          "rate": 5.44,
-          "date": "2026-02-12",
-          "isStale": false,
-          "staleDays": 5
-        },
-        {
           "id": "MORTGAGE30US",
           "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
           "bucket": "30Y fixed",
           "rate": 6.09,
           "date": "2026-02-12",
           "isStale": false,
-          "staleDays": 5
+          "staleDays": 6
         }
       ],
       "lowest": {
-        "id": "MORTGAGE15US",
-        "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
-        "bucket": "15Y fixed",
-        "rate": 5.44,
+        "id": "MORTGAGE30US",
+        "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
+        "bucket": "30Y fixed",
+        "rate": 6.09,
         "date": "2026-02-12",
         "isStale": false,
-        "staleDays": 5
+        "staleDays": 6
       },
       "highest": {
         "id": "MORTGAGE30US",
@@ -72,9 +54,9 @@
         "rate": 6.09,
         "date": "2026-02-12",
         "isStale": false,
-        "staleDays": 5
+        "staleDays": 6
       },
-      "spreadBps": 65
+      "spreadBps": 0
     }
   }
 }
