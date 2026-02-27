@@ -1,27 +1,18 @@
 {
   "version": 3,
-  "fetchedAt": 1772149808729,
-  "fetchedAtIso": "2026-02-26T23:50:08.729Z",
+  "fetchedAt": 1772154240455,
+  "fetchedAtIso": "2026-02-27T01:04:00.455Z",
   "sourceAsOf": 1772064000000,
   "sourceAsOfIso": "2026-02-26T00:00:00.000Z",
   "source": "FRED",
   "data": {
-    "MORTGAGE30US": {
-      "date": "2026-02-26",
-      "rate": 5.98,
-      "sourceSeriesId": "MORTGAGE30US",
-      "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
-      "bucket": "30Y fixed",
-      "staleDays": 0,
-      "isStale": false
-    },
     "MORTGAGE15US": {
       "date": "2026-02-26",
       "rate": 5.44,
       "sourceSeriesId": "MORTGAGE15US",
       "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
       "bucket": "15Y fixed",
-      "staleDays": 0,
+      "staleDays": 1,
       "isStale": false
     },
     "MORTGAGE5US": {
@@ -30,7 +21,7 @@
       "sourceSeriesId": "MORTGAGE5US",
       "label": "Freddie Mac 5/1 ARM (PMMS via FRED)",
       "bucket": "5/1 ARM",
-      "staleDays": 1204,
+      "staleDays": 1205,
       "isStale": true
     }
   },
@@ -44,16 +35,7 @@
           "rate": 5.44,
           "date": "2026-02-26",
           "isStale": false,
-          "staleDays": 0
-        },
-        {
-          "id": "MORTGAGE30US",
-          "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
-          "bucket": "30Y fixed",
-          "rate": 5.98,
-          "date": "2026-02-26",
-          "isStale": false,
-          "staleDays": 0
+          "staleDays": 1
         }
       ],
       "lowest": {
@@ -63,18 +45,18 @@
         "rate": 5.44,
         "date": "2026-02-26",
         "isStale": false,
-        "staleDays": 0
+        "staleDays": 1
       },
       "highest": {
-        "id": "MORTGAGE30US",
-        "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
-        "bucket": "30Y fixed",
-        "rate": 5.98,
+        "id": "MORTGAGE15US",
+        "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
+        "bucket": "15Y fixed",
+        "rate": 5.44,
         "date": "2026-02-26",
         "isStale": false,
-        "staleDays": 0
+        "staleDays": 1
       },
-      "spreadBps": 54
+      "spreadBps": 0
     }
   }
 }
