@@ -2,7 +2,7 @@ name: Update rates cache
 
 on:
   schedule:
-    - cron: "*/15 * * * *" # Every 15 minutes
+    - cron: "0 */12 * * *" # Twice daily (every 12 hours, UTC)
   workflow_dispatch:
 permissions:
   contents: write
