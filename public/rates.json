@@ -1,36 +1,36 @@
 {
   "version": 3,
-  "fetchedAt": 1792639326744,
-  "fetchedAtIso": "2026-10-22T03:22:06.744Z",
+  "fetchedAt": 1792687161387,
+  "fetchedAtIso": "2026-10-22T16:39:21.387Z",
   "sourceAsOf": 1792627200000,
   "sourceAsOfIso": "2026-10-22T00:00:00.000Z",
   "source": "FRED",
   "data": {
     "MORTGAGE30US": {
-      "date": "    <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300",
-      "rate": 400,
+      "date": "2026-10-22",
+      "rate": 7.32,
       "sourceSeriesId": "MORTGAGE30US",
       "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
       "bucket": "30Y fixed",
-      "staleDays": null,
-      "isStale": true
+      "staleDays": 0,
+      "isStale": false
     },
     "MORTGAGE15US": {
-      "date": "    <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300",
-      "rate": 400,
+      "date": "2026-10-22",
+      "rate": 6.68,
       "sourceSeriesId": "MORTGAGE15US",
       "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
       "bucket": "15Y fixed",
-      "staleDays": null,
-      "isStale": true
+      "staleDays": 0,
+      "isStale": false
     },
     "MORTGAGE5US": {
-      "date": "    <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300",
-      "rate": 400,
+      "date": "2022-11-10",
+      "rate": 6.06,
       "sourceSeriesId": "MORTGAGE5US",
       "label": "Freddie Mac 5/1 ARM (PMMS via FRED)",
       "bucket": "5/1 ARM",
-      "staleDays": null,
+      "staleDays": 1442,
       "isStale": true
     }
   },
@@ -38,52 +38,43 @@
     "bestRates": {
       "available": [
         {
-          "id": "MORTGAGE30US",
-          "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
-          "bucket": "30Y fixed",
-          "rate": 400,
-          "date": "    <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300",
-          "isStale": true,
-          "staleDays": null
-        },
-        {
           "id": "MORTGAGE15US",
           "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
           "bucket": "15Y fixed",
-          "rate": 400,
-          "date": "    <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300",
-          "isStale": true,
-          "staleDays": null
+          "rate": 6.68,
+          "date": "2026-10-22",
+          "isStale": false,
+          "staleDays": 0
         },
         {
-          "id": "MORTGAGE5US",
-          "label": "Freddie Mac 5/1 ARM (PMMS via FRED)",
-          "bucket": "5/1 ARM",
-          "rate": 400,
-          "date": "    <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300",
-          "isStale": true,
-          "staleDays": null
+          "id": "MORTGAGE30US",
+          "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
+          "bucket": "30Y fixed",
+          "rate": 7.32,
+          "date": "2026-10-22",
+          "isStale": false,
+          "staleDays": 0
         }
       ],
       "lowest": {
+        "id": "MORTGAGE15US",
+        "label": "Freddie Mac 15Y fixed (PMMS via FRED)",
+        "bucket": "15Y fixed",
+        "rate": 6.68,
+        "date": "2026-10-22",
+        "isStale": false,
+        "staleDays": 0
+      },
+      "highest": {
         "id": "MORTGAGE30US",
         "label": "Freddie Mac 30Y fixed (PMMS via FRED)",
         "bucket": "30Y fixed",
-        "rate": 400,
-        "date": "    <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300",
-        "isStale": true,
-        "staleDays": null
+        "rate": 7.32,
+        "date": "2026-10-22",
+        "isStale": false,
+        "staleDays": 0
       },
-      "highest": {
-        "id": "MORTGAGE5US",
-        "label": "Freddie Mac 5/1 ARM (PMMS via FRED)",
-        "bucket": "5/1 ARM",
-        "rate": 400,
-        "date": "    <link href=\"https://fonts.googleapis.com/css?family=Open+Sans:300",
-        "isStale": true,
-        "staleDays": null
-      },
-      "spreadBps": 0
+      "spreadBps": 64
     }
   }
 }
